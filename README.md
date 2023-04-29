@@ -1,3 +1,8 @@
+# Esquemático para ligaçao dos componentes
+![Controle-de-Acesso-com-ESP32-RFID-RC222-RELE-LEDs-CARTAOMESTRE_bb](https://user-images.githubusercontent.com/66142021/235301753-bf644ea6-087a-4726-8a6c-6c3e3e5c0418.png)
+# PinOut do ESP32
+![ESP32-38 PIN-DEVBOARD](https://user-images.githubusercontent.com/66142021/235302011-d1a5d855-c954-4d34-af21-e0c48a9aa48f.png)
+
 # Acesso Total: Controle de Acesso com ESP32 e RFID RC522
 
 Introdução
