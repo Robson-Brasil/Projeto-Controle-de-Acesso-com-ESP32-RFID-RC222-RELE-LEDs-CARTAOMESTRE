@@ -79,7 +79,7 @@ Layout típico de pinos usados:
   para usar led de cátodo comum ou apenas leds separados, simplesmente comente #define COMMON_ANODE.
 */
 
-#define PortaAberta 4  // Sensor de fim de curso, o RFID só lerá outro cartão, quando a porta for fechada
+constexpr uint8_t PortaAberta = 4;  // Sensor de fim de curso, o RFID só lerá outro cartão, quando a porta for fechada
 
 #define COMMON_ANODE
 
@@ -183,6 +183,32 @@ void setup() {
   Serial.println("Controle de Acesso v0.1");  // Para fins de depuração
   ShowReaderDetails();                        // Mostrar detalhes do leitor de cartão PCD - MFRC522.
 
+  // Lendo o estado do botão
+  EstadoBotao = digitalRead(BotaoAbrirPorta);
+
+  // Verificando se o botão foi pressionado
+  if (EstadoBotao == LOW) {
+    // Ligando o rele
+    digitalWrite(Rele, LOW);
+    delay(5000);
+    // Desligando os LEDs
+    digitalWrite(LedVerde, LED_OFF);
+    digitalWrite(LedAzul, LED_OFF);
+    // Tocando o buzzer
+    digitalWrite(Buzzer, HIGH);
+    delay(100);
+    digitalWrite(Buzzer, LOW);
+  } else {
+    // Desligando o rele
+    digitalWrite(Rele, HIGH);
+    // Ligando o LED verde
+    digitalWrite(LedVerde, LED_ON);
+    // Desligando o LED azul
+    digitalWrite(LedAzul, LED_OFF);
+    // Desligando o buzzer
+    digitalWrite(Buzzer, LOW);
+  }
+
   // Wipe Code - Se o botão (BotaoWipe) for pressionado durante a execução da configuração (ligada), a EEPROM será apagada.
   if (digitalRead(BotaoWipe) == LOW) {  // Quando o botão for pressionado, o pino deve ficar baixo, o botão está conectado ao GND
     digitalWrite(LedVermelho, LED_ON);  // O LED vermelho fica aceso para informar o usuário que vamos apagar
@@ -255,26 +281,6 @@ void setup() {
 }
 ///////////////////////////////////////// Main Loop ///////////////////////////////////
 void loop() {
-
-  EstadoBotao = digitalRead(BotaoAbrirPorta);
-
-    //Verificando o estado do botão para definir se acenderá ou
-  //apagará o led.  
-  if (EstadoBotao == LOW) {
-    digitalWrite(Rele,HIGH); //Botão pressionado, acende o led.
-  // digitalWrite(blueLed,HIGH); //Botão pressionado, acende o led.
-  //} else {
-    digitalWrite(LedVerde, LED_OFF);   // Turn on green LED
-
-    digitalWrite(Buzzer,HIGH); //Botão pressionado, acende o led.    // É O BUZZER NO LUGAR DO LED 
-  delay(70);
-   digitalWrite(Buzzer,LOW); //Botão pressionado, acende o led.    // É O BUZZER NO LUGAR DO LED 
- 
-  delay(1000);
-    digitalWrite(Rele,LOW);  //Botão não pressionado, apaga o led. 
-   // digitalWrite(blueLed,LOW); //Botão pressionado, acende o led. 
- 
-  }
 
   lcd.setCursor(5, 0);
   // imprimir mensagem estática
@@ -385,6 +391,7 @@ void denied() {
   digitalWrite(LedAzul, LED_OFF);   // Make sure blue LED is off
   digitalWrite(LedVermelho, LED_ON);   // Make sure blue LED is off
   digitalWrite(TagRecusada, LED_ON);   // Make sure blue LED is off
+  digitalWrite(Rele, HIGH);            // Relock door
 
   digitalWrite(Buzzer, HIGH);
   delay(250);
