@@ -4,18 +4,18 @@ Controle de Acesso por RFID
 Cadastramento por Cartão Mestre
 Autor : Robson Brasil
 Dispositivo : ESP32 WROOM32
-Preferences--> Aditional boards Manager URLs:
-                                  http://arduino.esp8266.com/stable/package_esp8266com_index.json,https://raw.githubusercontent.com/espressif/arduino-esp32/gh-pages/package_esp32_index.json
-Download Board ESP32 (2.0.8):
 Módulo RFID RC-522
 LCD I2C
-Versão : 20 - Alfa
-Última Modificação : 28/04/2023
+Versão : 25 - Alfa
+Última Modificação : 29/04/2023
+Preferences--> Aditional boards Manager URLs:
+                                  http://arduino.esp8266.com/stable/package_esp8266com_index.json,https://raw.githubusercontent.com/espressif/arduino-esp32/gh-pages/package_esp32_index.json
+Download Board ESP32 v.(2.0.7): (Obs. na versão 2.0.8 a biblioteca <MFRC522.h> está com problemas no ESP32)
 --------------------------------------------------------------------------------------------------------------------
 --------------------------------------------------------------------------------------------------------------------
 This is a MFRC522 library example; for further details and other examples see: https://github.com/miguelbalboa/rfid
 This example showing a complete Door Access Control System
-  Simple Work Flow (not limited to) :
+Simple Work Flow (not limited to) :
                       //               +---------+
   +----------------------------------->READ TAGS+^------------------------------------------+
   |                              +--------------------+                                     |
@@ -98,6 +98,11 @@ constexpr uint8_t LedAzul = 25;
 constexpr uint8_t Rele = 13;       // GPIO do Relé
 constexpr uint8_t BotaoWipe = 33;  // Pino do botão para o modo de limpeza
 
+constexpr uint8_t Buzzer = 17;           // GPIO do Buzzer
+constexpr uint8_t TagRecusada = 16;      // GPIO do LED Vermelho - Tag Recusada
+constexpr uint8_t BotaoAbrirPorta = 15;  // Pino do botão para o abrir a porta
+int EstadoBotao = 0;                     // varável para ler o estado do botao
+
 boolean match = false;        // Inicializar a correspondência do cartão como falso
 boolean programMode = false;  // Inicializar modo de programação como falso
 boolean replaceMaster = false;
@@ -156,6 +161,9 @@ void setup() {
   pinMode(LedAzul, OUTPUT);
   pinMode(BotaoWipe, INPUT_PULLUP);  // Habilitar o resistor pull-up do pino.
   pinMode(Rele, OUTPUT);
+  pinMode(TagRecusada, OUTPUT);
+  pinMode(BotaoAbrirPorta, INPUT_PULLUP);
+  pinMode(Buzzer, OUTPUT);//Definindo o pino buzzer como de saída.
   // Tenha cuidado com o comportamento do circuito do relé durante a reinicialização ou desligamento do seu Arduino.
   digitalWrite(Rele, HIGH);            // Certifique-se de que a porta esteja trancada
   digitalWrite(LedVermelho, LED_OFF);  // Certifique-se de que o LED esteja desligado
@@ -247,6 +255,26 @@ void setup() {
 }
 ///////////////////////////////////////// Main Loop ///////////////////////////////////
 void loop() {
+
+  EstadoBotao = digitalRead(BotaoAbrirPorta);
+
+    //Verificando o estado do botão para definir se acenderá ou
+  //apagará o led.  
+  if (EstadoBotao == LOW) {
+    digitalWrite(Rele,HIGH); //Botão pressionado, acende o led.
+  // digitalWrite(blueLed,HIGH); //Botão pressionado, acende o led.
+  //} else {
+    digitalWrite(LedVerde, LED_OFF);   // Turn on green LED
+
+    digitalWrite(Buzzer,HIGH); //Botão pressionado, acende o led.    // É O BUZZER NO LUGAR DO LED 
+  delay(70);
+   digitalWrite(Buzzer,LOW); //Botão pressionado, acende o led.    // É O BUZZER NO LUGAR DO LED 
+ 
+  delay(1000);
+    digitalWrite(Rele,LOW);  //Botão não pressionado, apaga o led. 
+   // digitalWrite(blueLed,LOW); //Botão pressionado, acende o led. 
+ 
+  }
 
   lcd.setCursor(5, 0);
   // imprimir mensagem estática
@@ -355,8 +383,33 @@ void granted(uint16_t setDelay) {
 void denied() {
   digitalWrite(LedVerde, LED_OFF);  // Make sure green LED is off
   digitalWrite(LedAzul, LED_OFF);   // Make sure blue LED is off
+  digitalWrite(LedVermelho, LED_ON);   // Make sure blue LED is off
+  digitalWrite(TagRecusada, LED_ON);   // Make sure blue LED is off
 
-  delay(1000);
+  digitalWrite(Buzzer, HIGH);
+  delay(250);
+  digitalWrite(Buzzer, LOW);
+  delay(250);
+  digitalWrite(Buzzer, HIGH);
+  delay(250);
+  digitalWrite(Buzzer, LOW);
+  delay(250);
+  digitalWrite(Buzzer, HIGH);
+  delay(250);
+  digitalWrite(Buzzer, LOW);
+  delay(250);
+  digitalWrite(Buzzer, HIGH);
+  delay(250);
+  digitalWrite(Buzzer, LOW);
+  delay(250);
+  digitalWrite(Buzzer, HIGH);
+  delay(250);
+  digitalWrite(Buzzer, LOW);
+  delay(250);
+  digitalWrite(Buzzer, HIGH);
+  delay(250);
+  digitalWrite(Buzzer, LOW);
+
 }
 ///////////////////////////////////////// Get PICC's UID ///////////////////////////////////
 uint8_t getID() {
