@@ -48,7 +48,7 @@ ESP32 - https://www.espressif.com/en/products/socs/esp32
 <p>
 RFID RC522 - https://www.nxp.com/products/rfid-nfc/reader-ics/highly-integrated-14443-a-ic-card-reader-with-uart-spi-interface:MFRC52202HN1
 
-# Projeto: Controle de Acesso com ESP32 RFID-RC222
+# Projeto: Controle de Acesso com ESP32 e RFID-RC222
 
 O projeto que será descrito aqui consiste em utilizar o microcontrolador ESP32 e o leitor de cartões identificação por radiofrequência modelo RC522 para criar um sistema de controle de acesso para uma porta ou ambiente. O objetivo é que o sistema permita a entrada somente de pessoas autorizadas e facilite o cadastro e exclusão dessas pessoas sem a necessidade de alterar o código manualmente.
 
