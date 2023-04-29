@@ -5,35 +5,47 @@
 
 # Acesso Total: Controle de Acesso com ESP32 e RFID RC522
 
-Introdução
+<h2>Introdução</h2>
+
 Funcionamento do Controle de Acesso
+<p>
 Vantagens do Controle de Acesso com ESP32 e RFID RC522
+<p>
 Aplicações do Controle de Acesso com ESP32 e RFID RC522
+<p>
 Considerações Finais
+<p>
 Referências
 
-Introdução
+## Introdução
+
 O controle de acesso é uma necessidade vital em muitas instalações, como empresas, escolas e hospitais. O uso de tecnologias como o ESP32 e o RFID RC522 pode tornar essa tarefa mais fácil e segura.
 O ESP32 é um microcontrolador de baixo custo com conectividade Wi-Fi e Bluetooth integrada, enquanto o RFID RC522 é um leitor de cartões RFID que permite a identificação rápida e precisa de usuários autorizados.
 
-Funcionamento do Controle de Acesso
+## Funcionamento do Controle de Acesso
+<p>
 O controle de acesso com ESP32 e RFID RC522 funciona da seguinte maneira: primeiro, o usuário aproxima seu cartão RFID do leitor RC522. Em seguida, o leitor envia os dados do cartão para o microcontrolador ESP32, que verifica se o cartão é válido e se o usuário tem permissão para acessar o local.
 Se o cartão for válido e o usuário tiver permissão, o ESP32 aciona um relé que libera a trava da porta ou cancela o alarme de segurança. Caso contrário, o acesso é negado e um alerta é emitido.
 
-Vantagens do Controle de Acesso com ESP32 e RFID RC522
+## Vantagens do Controle de Acesso com ESP32 e RFID RC522
+<p>
 Uma das principais vantagens do controle de acesso com ESP32 e RFID RC522 é a segurança que proporciona. Com a identificação por cartão RFID, é possível garantir que apenas pessoas autorizadas tenham acesso ao local.
 Além disso, o uso do ESP32 permite que o sistema seja facilmente integrado a outros dispositivos inteligentes, como câmeras de segurança e sistemas de automação predial, tornando a gestão do acesso ainda mais eficiente.
 
-Aplicações do Controle de Acesso com ESP32 e RFID RC522
+## Aplicações do Controle de Acesso com ESP32 e RFID RC522
+<p>
 O controle de acesso com ESP32 e RFID RC522 pode ser aplicado em uma variedade de ambientes, desde escritórios e fábricas até escolas e hospitais.
 Também pode ser utilizado em residências, permitindo que os moradores controlem o acesso à sua casa de forma segura e conveniente, sem precisar carregar chaves ou lembrar senhas.
 
-Considerações Finais
+## Considerações Finais
+<p>
 O controle de acesso com ESP32 e RFID RC522 é uma solução eficiente e segura para gerenciar o acesso a locais restritos. Com a crescente demanda por segurança em ambientes corporativos e residenciais, essa tecnologia tem um grande potencial de mercado.
 No entanto, é importante ressaltar que a implementação desse sistema deve ser feita por profissionais capacitados e seguindo as normas de segurança adequadas, a fim de garantir a integridade do sistema e a privacidade dos usuários.
 
-Referências
+## Referências
+<p>
 ESP32 - https://www.espressif.com/en/products/socs/esp32
+<p>
 RFID RC522 - https://www.nxp.com/products/rfid-nfc/reader-ics/highly-integrated-14443-a-ic-card-reader-with-uart-spi-interface:MFRC52202HN1
 
 # Projeto: Controle de Acesso com ESP32 RFID-RC222
