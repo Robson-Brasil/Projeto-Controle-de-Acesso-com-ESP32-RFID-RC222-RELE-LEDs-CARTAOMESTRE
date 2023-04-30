@@ -3,6 +3,10 @@
 # PinOut do ESP32
 ![ESP32-38 PIN-DEVBOARD](https://user-images.githubusercontent.com/66142021/235302011-d1a5d855-c954-4d34-af21-e0c48a9aa48f.png)
 
+# Vídeo no YouTube
+<p>
+https://www.youtube.com/watch?v=Grn1-W_259g&t=9s
+
 # Acesso Total: Controle de Acesso com ESP32 e RFID RC522
 
 <h2>Introdução</h2>
