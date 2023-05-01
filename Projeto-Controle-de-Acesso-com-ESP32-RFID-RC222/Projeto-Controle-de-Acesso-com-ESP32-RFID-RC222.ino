@@ -101,11 +101,11 @@ constexpr uint8_t BotaoWipe = 33;  // Pino do botão para o modo de limpeza
 constexpr uint8_t Buzzer = 17;           // GPIO do Buzzer
 constexpr uint8_t TagRecusada = 16;      // GPIO do LED Vermelho - Tag Recusada
 constexpr uint8_t BotaoAbrirPorta = 15;  // Pino do botão para o abrir a porta
-int EstadoBotao = 0;                     // varável para ler o estado do botao
 
 boolean match = false;        // Inicializar a correspondência do cartão como falso
 boolean programMode = false;  // Inicializar modo de programação como falso
 boolean replaceMaster = false;
+bool buttonPressed = false;
 
 uint8_t successRead;  // Variável inteira para manter se tivemos uma leitura bem-sucedida do leitor.
 
@@ -150,6 +150,7 @@ void scrollText(int row, String message, int delayTime, int ColunasLCD) {
     delay(delayTime);
   }
 }
+
 ///////////////////////////////////////// Setup ///////////////////////////////////
 void setup() {
   EEPROM.begin(1024);
@@ -178,36 +179,10 @@ void setup() {
   mfrc522.PCD_Init();  // Inicializa o Módulo MFRC522
 
   // Se você definir o Ganho da Antena como Max, ele aumentará a distância de leitura
-  // mfrc522.PCD_SetAntennaGain(mfrc522.RxGain_max);
+  //mfrc522.PCD_SetAntennaGain(mfrc522.RxGain_max);
 
   Serial.println("Controle de Acesso v0.1");  // Para fins de depuração
   ShowReaderDetails();                        // Mostrar detalhes do leitor de cartão PCD - MFRC522.
-
-  // Lendo o estado do botão
-  EstadoBotao = digitalRead(BotaoAbrirPorta);
-
-  // Verificando se o botão foi pressionado
-  if (EstadoBotao == LOW) {
-    // Ligando o rele
-    digitalWrite(Rele, LOW);
-    delay(5000);
-    // Desligando os LEDs
-    digitalWrite(LedVerde, LED_OFF);
-    digitalWrite(LedAzul, LED_OFF);
-    // Tocando o buzzer
-    digitalWrite(Buzzer, HIGH);
-    delay(100);
-    digitalWrite(Buzzer, LOW);
-  } else {
-    // Desligando o rele
-    digitalWrite(Rele, HIGH);
-    // Ligando o LED verde
-    digitalWrite(LedVerde, LED_ON);
-    // Desligando o LED azul
-    digitalWrite(LedAzul, LED_OFF);
-    // Desligando o buzzer
-    digitalWrite(Buzzer, LOW);
-  }
 
   // Wipe Code - Se o botão (BotaoWipe) for pressionado durante a execução da configuração (ligada), a EEPROM será apagada.
   if (digitalRead(BotaoWipe) == LOW) {  // Quando o botão for pressionado, o pino deve ficar baixo, o botão está conectado ao GND
@@ -281,6 +256,13 @@ void setup() {
 }
 ///////////////////////////////////////// Main Loop ///////////////////////////////////
 void loop() {
+
+  if (buttonPressed) {
+    digitalWrite(Rele, LOW); // Liga o relé
+    abrirPorta(5000); // Chama a função para abrir a porta e mantê-la aberta por 5 segundos
+    digitalWrite(Rele, HIGH); // Desliga o relé
+    buttonPressed = false; // Reseta a variável que indica que o botão foi pressionado
+  }
 
   lcd.setCursor(5, 0);
   // imprimir mensagem estática
@@ -368,6 +350,17 @@ void loop() {
     }
   }
 }
+/////////////////////////////////////////  Botão Externo    ///////////////////////////////////
+void abrirPorta(uint16_t setDelay) {
+  digitalWrite(LedAzul, LED_OFF);      // Turn off blue LED
+  digitalWrite(LedVermelho, LED_OFF);  // Turn off red LED
+  digitalWrite(LedVerde, LED_ON);      // Turn on green LED
+  digitalWrite(Rele, LOW);             // Unlock door!
+  delay(setDelay);                     // Hold door lock open for given seconds
+  digitalWrite(Rele, HIGH);            // Relock door
+
+}
+
 /////////////////////////////////////////  Access Granted    ///////////////////////////////////
 void granted(uint16_t setDelay) {
   digitalWrite(LedAzul, LED_OFF);      // Turn off blue LED
@@ -376,15 +369,18 @@ void granted(uint16_t setDelay) {
   digitalWrite(Rele, LOW);             // Unlock door!
   delay(setDelay);                     // Hold door lock open for given seconds
   digitalWrite(Rele, HIGH);            // Relock door
+
   // Mantém acesso liberado até acionar o sensor de porta
   while (digitalRead(PortaAberta))
     digitalWrite(Rele, LOW);
-  digitalWrite(Rele, HIGH);
+    digitalWrite(Rele, HIGH);
   while (digitalRead(PortaAberta))
     digitalWrite(LedVerde, LOW);
-  digitalWrite(LedVerde, HIGH);
+    digitalWrite(LedVerde, HIGH);
   lcd.clear();  // limpa a tela
+
 }
+
 ///////////////////////////////////////// Access Denied  ///////////////////////////////////
 void denied() {
   digitalWrite(LedVerde, LED_OFF);  // Make sure green LED is off
