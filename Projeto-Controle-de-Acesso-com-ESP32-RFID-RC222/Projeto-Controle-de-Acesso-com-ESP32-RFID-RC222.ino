@@ -79,8 +79,6 @@ Layout típico de pinos usados:
   para usar led de cátodo comum ou apenas leds separados, simplesmente comente #define COMMON_ANODE.
 */
 
-constexpr uint8_t PortaAberta = 4;  // Sensor de fim de curso, o RFID só lerá outro cartão, quando a porta for fechada
-
 #define COMMON_ANODE
 
 #ifdef COMMON_ANODE
@@ -90,6 +88,8 @@ constexpr uint8_t PortaAberta = 4;  // Sensor de fim de curso, o RFID só lerá 
 #define LED_ON HIGH
 #define LED_OFF LOW
 #endif
+
+constexpr uint8_t PortaAberta = 4;  // Sensor de fim de curso, o RFID só lerá outro cartão, quando a porta for fechada
 
 constexpr uint8_t LedVermelho = 27;  // Set Led Pins
 constexpr uint8_t LedVerde = 26;
@@ -105,7 +105,6 @@ constexpr uint8_t BotaoAbrirPorta = 15;  // Pino do botão para o abrir a porta
 boolean match = false;        // Inicializar a correspondência do cartão como falso
 boolean programMode = false;  // Inicializar modo de programação como falso
 boolean replaceMaster = false;
-bool buttonPressed = false;
 
 uint8_t successRead;  // Variável inteira para manter se tivemos uma leitura bem-sucedida do leitor.
 
@@ -150,7 +149,6 @@ void scrollText(int row, String message, int delayTime, int ColunasLCD) {
     delay(delayTime);
   }
 }
-
 ///////////////////////////////////////// Setup ///////////////////////////////////
 void setup() {
   EEPROM.begin(1024);
@@ -164,7 +162,7 @@ void setup() {
   pinMode(Rele, OUTPUT);
   pinMode(TagRecusada, OUTPUT);
   pinMode(BotaoAbrirPorta, INPUT_PULLUP);
-  pinMode(Buzzer, OUTPUT);//Definindo o pino buzzer como de saída.
+  pinMode(Buzzer, OUTPUT);  //Definindo o pino buzzer como de saída.
   // Tenha cuidado com o comportamento do circuito do relé durante a reinicialização ou desligamento do seu Arduino.
   digitalWrite(Rele, HIGH);            // Certifique-se de que a porta esteja trancada
   digitalWrite(LedVermelho, LED_OFF);  // Certifique-se de que o LED esteja desligado
@@ -257,13 +255,6 @@ void setup() {
 ///////////////////////////////////////// Main Loop ///////////////////////////////////
 void loop() {
 
-  if (buttonPressed) {
-    digitalWrite(Rele, LOW); // Liga o relé
-    abrirPorta(5000); // Chama a função para abrir a porta e mantê-la aberta por 5 segundos
-    digitalWrite(Rele, HIGH); // Desliga o relé
-    buttonPressed = false; // Reseta a variável que indica que o botão foi pressionado
-  }
-
   lcd.setCursor(5, 0);
   // imprimir mensagem estática
   lcd.print(messageStatic0);
@@ -350,44 +341,36 @@ void loop() {
     }
   }
 }
-/////////////////////////////////////////  Botão Externo    ///////////////////////////////////
-void abrirPorta(uint16_t setDelay) {
-  digitalWrite(LedAzul, LED_OFF);      // Turn off blue LED
-  digitalWrite(LedVermelho, LED_OFF);  // Turn off red LED
-  digitalWrite(LedVerde, LED_ON);      // Turn on green LED
-  digitalWrite(Rele, LOW);             // Unlock door!
-  delay(setDelay);                     // Hold door lock open for given seconds
-  digitalWrite(Rele, HIGH);            // Relock door
-
-}
-
 /////////////////////////////////////////  Access Granted    ///////////////////////////////////
 void granted(uint16_t setDelay) {
-  digitalWrite(LedAzul, LED_OFF);      // Turn off blue LED
-  digitalWrite(LedVermelho, LED_OFF);  // Turn off red LED
-  digitalWrite(LedVerde, LED_ON);      // Turn on green LED
-  digitalWrite(Rele, LOW);             // Unlock door!
-  delay(setDelay);                     // Hold door lock open for given seconds
-  digitalWrite(Rele, HIGH);            // Relock door
+  digitalWrite(LedAzul, LED_OFF);      // Desliga o LED azul
+  digitalWrite(LedVermelho, LED_OFF);  // Desliga o LED vermelho
+  digitalWrite(LedVerde, LED_ON);      // Liga o LED verde
+  digitalWrite(Rele, LOW);             // Destrava a porta
+  delay(setDelay);                     // Mantém a porta destravada pelo tempo especificado
+  digitalWrite(Rele, HIGH);            // Trava a porta novamente
 
-  // Mantém acesso liberado até acionar o sensor de porta
-  while (digitalRead(PortaAberta))
+  // Mantém o acesso liberado até que o sensor da porta seja acionado
+  while (digitalRead(PortaAberta)) {
     digitalWrite(Rele, LOW);
     digitalWrite(Rele, HIGH);
-  while (digitalRead(PortaAberta))
+  }
+
+  // Aguarda até que a porta seja fechada antes de continuar
+  while (!digitalRead(PortaAberta)) {
     digitalWrite(LedVerde, LOW);
     digitalWrite(LedVerde, HIGH);
-  lcd.clear();  // limpa a tela
+  }
 
+  lcd.clear();  // Limpa a tela do LCD
 }
-
 ///////////////////////////////////////// Access Denied  ///////////////////////////////////
 void denied() {
-  digitalWrite(LedVerde, LED_OFF);  // Make sure green LED is off
-  digitalWrite(LedAzul, LED_OFF);   // Make sure blue LED is off
-  digitalWrite(LedVermelho, LED_ON);   // Make sure blue LED is off
-  digitalWrite(TagRecusada, LED_ON);   // Make sure blue LED is off
-  digitalWrite(Rele, HIGH);            // Relock door
+  digitalWrite(LedVerde, LED_OFF);    // Make sure green LED is off
+  digitalWrite(LedAzul, LED_OFF);     // Make sure blue LED is off
+  digitalWrite(LedVermelho, LED_ON);  // Make sure blue LED is off
+  digitalWrite(TagRecusada, LED_ON);  // Make sure blue LED is off
+  digitalWrite(Rele, HIGH);           // Relock door
 
   digitalWrite(Buzzer, HIGH);
   delay(250);
@@ -412,7 +395,6 @@ void denied() {
   digitalWrite(Buzzer, HIGH);
   delay(250);
   digitalWrite(Buzzer, LOW);
-
 }
 ///////////////////////////////////////// Get PICC's UID ///////////////////////////////////
 uint8_t getID() {
