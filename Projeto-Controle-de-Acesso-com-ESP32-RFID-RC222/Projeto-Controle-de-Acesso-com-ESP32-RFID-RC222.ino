@@ -102,6 +102,8 @@ constexpr uint8_t Buzzer = 17;           // GPIO do Buzzer
 constexpr uint8_t TagRecusada = 16;      // GPIO do LED Vermelho - Tag Recusada
 constexpr uint8_t BotaoAbrirPorta = 15;  // Pino do botão para o abrir a porta
 
+int estadoBotao = 0;       // varável para ler o estado do botao
+
 boolean match = false;        // Inicializar a correspondência do cartão como falso
 boolean programMode = false;  // Inicializar modo de programação como falso
 boolean replaceMaster = false;
@@ -161,7 +163,7 @@ void setup() {
   pinMode(BotaoWipe, INPUT_PULLUP);  // Habilitar o resistor pull-up do pino.
   pinMode(Rele, OUTPUT);
   pinMode(TagRecusada, OUTPUT);
-  pinMode(BotaoAbrirPorta, INPUT_PULLUP);
+  pinMode(BotaoAbrirPorta, INPUT);
   pinMode(Buzzer, OUTPUT);  //Definindo o pino buzzer como de saída.
   // Tenha cuidado com o comportamento do circuito do relé durante a reinicialização ou desligamento do seu Arduino.
   digitalWrite(Rele, HIGH);            // Certifique-se de que a porta esteja trancada
@@ -255,6 +257,15 @@ void setup() {
 ///////////////////////////////////////// Main Loop ///////////////////////////////////
 void loop() {
 
+  // leitura do botão
+  int botaoEstado = digitalRead(BotaoAbrirPorta);
+  // se o botão for pressionado, aciona o relé
+  if (botaoEstado == HIGH) {
+    digitalWrite(Rele, LOW);
+    delay(5000); // aguarda 5 segundos
+    digitalWrite(Rele, HIGH);
+  }
+
   lcd.setCursor(5, 0);
   // imprimir mensagem estática
   lcd.print(messageStatic0);
@@ -340,6 +351,7 @@ void loop() {
       }
     }
   }
+
 }
 /////////////////////////////////////////  Access Granted    ///////////////////////////////////
 void granted(uint16_t setDelay) {
