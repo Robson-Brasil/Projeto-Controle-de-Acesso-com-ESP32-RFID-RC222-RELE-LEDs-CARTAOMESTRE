@@ -6,8 +6,8 @@
   Dispositivo : ESP32 WROOM32
   Módulo RFID RC-522
   LCD I2C
-  Versão : 25 - Alfa
-  Última Modificação : 29/04/2023
+  Versão : 26 - Alfa
+  Última Modificação : 08/01/2024
   Preferences--> Aditional boards Manager URLs:
                            http://arduino.esp8266.com/stable/package_esp8266com_index.json,
                            https://raw.githubusercontent.com/espressif/arduino-esp32/gh-pages/package_esp32_index.json
@@ -66,7 +66,6 @@
 
 #include "Bibliotecas.h"
 #include "GPIOs.h"
-#include "Definicoes.h"
 
 /*
   Em vez de um relé, você pode querer usar um servo. Os servos também podem bloquear e desbloquear fechaduras
@@ -75,6 +74,54 @@
 */
 
 // #include <Servo.h>
+
+/*
+  Para visualizar o que está acontecendo no hardware, precisamos de alguns leds e para controlar a trava da porta,
+  um relé e um botão de limpeza (ou algum outro hardware) Led de ânodo comum usado, digitalWriting HIGH desliga o
+  led Lembre-se de que, se você estiver indo para usar led de cátodo comum ou apenas leds separados, simplesmente
+  comente #define COMMON_ANODE.
+*/
+#define COMMON_ANODE
+
+#ifdef COMMON_ANODE
+#define LED_ON LOW
+#define LED_OFF HIGH
+#else
+#define LED_ON HIGH
+#define LED_OFF LOW
+#endif
+
+int estadoBotao = 0;       // Variável para ler o estado do botao
+
+boolean match = false;        // Inicializar a correspondência do cartão como falso
+boolean programMode = false;  // Inicializar modo de programação como falso
+boolean replaceMaster = false;
+
+uint8_t successRead;  // Variável inteira para manter se tivemos uma leitura bem-sucedida do leitor.
+
+byte storedCard[4];  // Armazena um ID lido da EEPROM.
+byte readCard[4];    // Armazena o ID escaneado lido do módulo RFID.
+byte masterCard[4];  // Armazena o ID do cartão master lido da EEPROM.
+
+// Cria uma instância da classe MFRC522.
+constexpr uint8_t RST_PIN = 2;  // Configurável, veja o layout típico de pinos acima.
+constexpr uint8_t SS_PIN = 5;   // Configurável, veja o layout típico de pinos acima.
+
+MFRC522 mfrc522(SS_PIN, RST_PIN);
+
+// --- Variáveis Globais ---
+char st[20];
+
+// Definir o número de colunas e linhas do display LCD
+int ColunasLCD = 20;
+int LinhasLCD = 4;
+
+// Definir o endereço do display LCD, número de colunas e linhas
+// Se você não souber o endereço do seu display, execute um sketch de scanner I2C.
+LiquidCrystal_I2C lcd(0x27, ColunasLCD, LinhasLCD);
+
+String messageStatic0 = "POR FAVOR";
+String messageStatic1 = "APROXIME SEU CARTAO!";
 
 /* Função para rolar o texto
    A função aceita os seguintes argumentos:
@@ -94,29 +141,9 @@ void scrollText(int row, String message, int delayTime, int ColunasLCD) {
   }
 }
 //Protótipos
-void initEEPRON();
 void initOutputInput();
-void initSerialBegin();
+void initEEPROM();
 
-//Função: Inicia os Seriais Begins do código!
-void initSerialBegin(){
-  EEPROM.begin(1024);
-
-  // Protocolo de configuração
-  Serial.begin(115200);  // Inicializar comunicações serial com o PC.
-  while (!Serial);
-  
-  SPI.begin();         // O Módulo MFRC522 usa o protocolo SPI
-  
-  mfrc522.PCD_Init();  // Inicializa o Módulo MFRC522
-
-  // Iniciar o LCD
-  lcd.begin();
-  // Ligar retroiluminação do LCD
-  lcd.backlight();
-  
-}
-//Função: Saídas e Entradas
 void initOutputInput(){
   // Arduino Pin Configuration
   pinMode(PortaAberta, INPUT_PULLUP);//Sensor de fim de curso, o RFID só lerá outro cartão, quando a porta for fechada
@@ -134,15 +161,10 @@ void initOutputInput(){
   digitalWrite(LedVermelho, LED_OFF);  // Certifique-se de que o LED esteja desligado
   digitalWrite(LedVerde, LED_OFF);     // Certifique-se de que o LED esteja desligado
   digitalWrite(LedAzul, LED_OFF);      // Certifique-se de que o LED esteja desligado
+  
 }
-//Função: Inicia o EEPROM
+
 void initEEPROM(){
-    // Se você definir o Ganho da Antena como Max, ele aumentará a distância de leitura
-  //mfrc522.PCD_SetAntennaGain(mfrc522.RxGain_max); <--Não consegui fazer funcionar na potência máxima
-
-  Serial.println("Controle de Acesso v0.1");  // Para fins de depuração
-  ShowReaderDetails();                        // Mostrar detalhes do leitor de cartão PCD - MFRC522.
-
   /* Wipe Code - Se o botão (BotaoWipe) for pressionado durante a execução da configuração (ligada), a EEPROM
      será apagada.*/
   if (digitalRead(BotaoWipe) == LOW) {  // Quando o botão for pressionado, o pino deve ficar baixo, o botão está conectado ao GND
@@ -208,15 +230,32 @@ void initEEPROM(){
   cycleLeds();  // "Está tudo pronto, vamos dar ao usuário algum feedback por meio do ciclo de LEDs.
 
   EEPROM.commit();
-  
 }
 ///////////////////////////////////////////////////// Setup ////////////////////////////////////////////////////////
 void setup() {
 
-  //Funções
-  initEEPROM();
+  EEPROM.begin(1024);
   initOutputInput();
-  initSerialBegin();
+  initEEPROM();
+
+    // Protocolo de configuração
+  Serial.begin(115200);  // Inicializar comunicações serial com o PC.
+  while (!Serial);
+  
+  SPI.begin();         // O Módulo MFRC522 usa o protocolo SPI
+  
+  mfrc522.PCD_Init();  // Inicializa o Módulo MFRC522
+
+  // Se você definir o Ganho da Antena como Max, ele aumentará a distância de leitura
+  // mfrc522.PCD_SetAntennaGain(mfrc522.RxGain_max); //<--Não consegui fazer funcionar na potência máxima
+
+  Serial.println("Controle de Acesso v.26 - Alfa");  // Para fins de depuração
+  ShowReaderDetails();                        // Mostrar detalhes do leitor de cartão PCD - MFRC522.
+
+  // Iniciar o LCD
+  lcd.begin();
+  // Ligar retroiluminação do LCD
+  lcd.backlight();
     
 }
 ////////////////////////////////////////////////////// Main Loop ////////////////////////////////////////////////////
