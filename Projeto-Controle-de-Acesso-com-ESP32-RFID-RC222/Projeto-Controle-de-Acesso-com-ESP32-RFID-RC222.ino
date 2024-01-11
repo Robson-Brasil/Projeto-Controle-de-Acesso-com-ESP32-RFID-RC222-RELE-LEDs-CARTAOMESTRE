@@ -66,6 +66,11 @@
 
 #include "Bibliotecas.h"
 #include "GPIOs.h"
+#include "LoginsSenhas.h"
+
+const char* host = "esp32ota";
+const char* ssid = "IoT";
+const char* password = "@IoT@S3nh@S3gur@";
 
 /*
   Em vez de um relé, você pode querer usar um servo. Os servos também podem bloquear e desbloquear fechaduras
@@ -231,6 +236,7 @@ void initEEPROM(){
 
   EEPROM.commit();
 }
+
 ///////////////////////////////////////////////////// Setup ////////////////////////////////////////////////////////
 void setup() {
 
@@ -238,10 +244,34 @@ void setup() {
   initOutputInput();
   initEEPROM();
 
-    // Protocolo de configuração
+  // Protocolo de configuração
   Serial.begin(115200);  // Inicializar comunicações serial com o PC.
   while (!Serial);
-  
+
+  // Connect to WiFi network
+  WiFi.begin(ssid, password);
+  Serial.println("");
+
+  // Wait for connection
+  while (WiFi.status() != WL_CONNECTED) {
+    delay(500);
+    Serial.print(".");
+  }
+  Serial.println("");
+  Serial.print("Connected to ");
+  Serial.println(ssid);
+  Serial.print("IP address: ");
+  Serial.println(WiFi.localIP());
+
+  /*use mdns for host name resolution*/
+  if (!MDNS.begin(host)) { //http://esp32ota.local
+    Serial.println("Error setting up MDNS responder!");
+    while (1) {
+      delay(1000);
+    }
+  }
+  Serial.println("mDNS responder started");
+
   SPI.begin();         // O Módulo MFRC522 usa o protocolo SPI
   
   mfrc522.PCD_Init();  // Inicializa o Módulo MFRC522
@@ -252,14 +282,56 @@ void setup() {
   Serial.println("Controle de Acesso v.26 - Alfa");  // Para fins de depuração
   ShowReaderDetails();                        // Mostrar detalhes do leitor de cartão PCD - MFRC522.
 
+  // Port defaults to 3232
+  // ArduinoOTA.setPort(3232);
+
+  // Hostname defaults to esp3232-[MAC]
+  // ArduinoOTA.setHostname("myesp32");
+
+  // No authentication by default
+  // ArduinoOTA.setPassword("admin");
+
+  // Password can be set with it's md5 value as well
+  // MD5(admin) = 21232f297a57a5a743894a0e4a801fc3
+  // ArduinoOTA.setPasswordHash("21232f297a57a5a743894a0e4a801fc3");
+
+  ArduinoOTA
+    .onStart([]() {
+      String type;
+      if (ArduinoOTA.getCommand() == U_FLASH)
+        type = "sketch";
+      else // U_SPIFFS
+        type = "filesystem";
+
+      // NOTE: if updating SPIFFS this would be the place to unmount SPIFFS using SPIFFS.end()
+      Serial.println("Start updating " + type);
+    })
+    .onEnd([]() {
+      Serial.println("\nEnd");
+    })
+    .onProgress([](unsigned int progress, unsigned int total) {
+      Serial.printf("Progress: %u%%\r", (progress / (total / 100)));
+    })
+    .onError([](ota_error_t error) {
+      Serial.printf("Error[%u]: ", error);
+      if (error == OTA_AUTH_ERROR) Serial.println("Auth Failed");
+      else if (error == OTA_BEGIN_ERROR) Serial.println("Begin Failed");
+      else if (error == OTA_CONNECT_ERROR) Serial.println("Connect Failed");
+      else if (error == OTA_RECEIVE_ERROR) Serial.println("Receive Failed");
+      else if (error == OTA_END_ERROR) Serial.println("End Failed");
+    });
+
+  ArduinoOTA.begin();
+
   // Iniciar o LCD
   lcd.begin();
   // Ligar retroiluminação do LCD
   lcd.backlight();
-    
 }
 ////////////////////////////////////////////////////// Main Loop ////////////////////////////////////////////////////
 void loop() {
+
+  ArduinoOTA.handle();
 
   // Leitura do botão
   int botaoEstado = digitalRead(BotaoAbrirPorta);
