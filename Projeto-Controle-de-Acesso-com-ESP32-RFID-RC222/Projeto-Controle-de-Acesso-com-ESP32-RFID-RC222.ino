@@ -272,24 +272,14 @@ void setup() {
   }
   Serial.println("mDNS responder started");
 
-  SPI.begin();         // O Módulo MFRC522 usa o protocolo SPI
-  
-  mfrc522.PCD_Init();  // Inicializa o Módulo MFRC522
-
-  // Se você definir o Ganho da Antena como Max, ele aumentará a distância de leitura
-  // mfrc522.PCD_SetAntennaGain(mfrc522.RxGain_max); //<--Não consegui fazer funcionar na potência máxima
-
-  Serial.println("Controle de Acesso v.26 - Alfa");  // Para fins de depuração
-  ShowReaderDetails();                        // Mostrar detalhes do leitor de cartão PCD - MFRC522.
-
   // Port defaults to 3232
   // ArduinoOTA.setPort(3232);
 
   // Hostname defaults to esp3232-[MAC]
-  // ArduinoOTA.setHostname("myesp32");
+  ArduinoOTA.setHostname("esp32ota");
 
   // No authentication by default
-  // ArduinoOTA.setPassword("admin");
+  ArduinoOTA.setPassword("loboalfa");
 
   // Password can be set with it's md5 value as well
   // MD5(admin) = 21232f297a57a5a743894a0e4a801fc3
@@ -322,6 +312,16 @@ void setup() {
     });
 
   ArduinoOTA.begin();
+
+  SPI.begin();         // O Módulo MFRC522 usa o protocolo SPI
+  
+  mfrc522.PCD_Init();  // Inicializa o Módulo MFRC522
+
+  // Se você definir o Ganho da Antena como Max, ele aumentará a distância de leitura
+  // mfrc522.PCD_SetAntennaGain(mfrc522.RxGain_max); //<--Não consegui fazer funcionar na potência máxima
+
+  Serial.println("Controle de Acesso v.26 - Alfa");  // Para fins de depuração
+  ShowReaderDetails();                        // Mostrar detalhes do leitor de cartão PCD - MFRC522.
 
   // Iniciar o LCD
   lcd.begin();
