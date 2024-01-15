@@ -11,4 +11,4 @@ constexpr uint8_t BotaoWipe = 33;  // Pino do botão para o modo de limpeza
 
 constexpr uint8_t Buzzer = 17;           // GPIO do Buzzer
 constexpr uint8_t TagRecusada = 16;      // GPIO do LED Vermelho - Tag Recusada
-constexpr uint8_t BotaoAbrirPorta = 15;  // Pino do botão para o abrir a porta
+constexpr uint8_t BotaoAbrirPorta = 15;  // Pino do botão para o abrir a porta\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\

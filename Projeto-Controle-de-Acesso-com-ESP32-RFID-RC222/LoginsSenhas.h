@@ -1,3 +1,4 @@
-// WebServer
-const char* http_username = "RobsonBrasil";   // Login da página do WebServer
-const char* http_password = "loboalfa";       // Senha da página do WebServer
+
+// Configurações do WIFI
+const char* ssid =      "IoT";                // SSID nome da rede WI-FI que deseja se conectar
+const char* password =  "@IoT@S3nh@S3gur@";   // Senha da rede WI-FI que deseja se conectar

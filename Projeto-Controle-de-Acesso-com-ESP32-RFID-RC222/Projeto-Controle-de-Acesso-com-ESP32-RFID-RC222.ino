@@ -67,10 +67,9 @@
 #include "Bibliotecas.h"
 #include "GPIOs.h"
 #include "LoginsSenhas.h"
+#include "VariaveisGlobais.h"
+#include "WebServerOTA.h"
 
-const char* host = "esp32ota";
-const char* ssid = "IoT";
-const char* password = "@IoT@S3nh@S3gur@";
 
 /*
   Em vez de um relé, você pode querer usar um servo. Os servos também podem bloquear e desbloquear fechaduras
@@ -149,7 +148,7 @@ void scrollText(int row, String message, int delayTime, int ColunasLCD) {
 void initOutputInput();
 void initEEPROM();
 
-void initOutputInput(){
+void initOutputInput() {
   // Arduino Pin Configuration
   pinMode(PortaAberta, INPUT_PULLUP);//Sensor de fim de curso, o RFID só lerá outro cartão, quando a porta for fechada
   pinMode(LedVermelho, OUTPUT);
@@ -160,16 +159,16 @@ void initOutputInput(){
   pinMode(TagRecusada, OUTPUT);
   pinMode(BotaoAbrirPorta, INPUT);
   pinMode(Buzzer, OUTPUT);  //Definindo o pino buzzer como de saída.
-  
+
   // Tenha cuidado com o comportamento do circuito do relé durante a reinicialização ou desligamento do seu Arduino.
   digitalWrite(Rele, HIGH);            // Certifique-se de que a porta esteja trancada
   digitalWrite(LedVermelho, LED_OFF);  // Certifique-se de que o LED esteja desligado
   digitalWrite(LedVerde, LED_OFF);     // Certifique-se de que o LED esteja desligado
   digitalWrite(LedAzul, LED_OFF);      // Certifique-se de que o LED esteja desligado
-  
+
 }
 
-void initEEPROM(){
+void initEEPROM() {
   /* Wipe Code - Se o botão (BotaoWipe) for pressionado durante a execução da configuração (ligada), a EEPROM
      será apagada.*/
   if (digitalRead(BotaoWipe) == LOW) {  // Quando o botão for pressionado, o pino deve ficar baixo, o botão está conectado ao GND
@@ -264,7 +263,7 @@ void setup() {
   Serial.println(WiFi.localIP());
 
   /*use mdns for host name resolution*/
-  if (!MDNS.begin(host)) { //http://esp32ota.local
+  if (!MDNS.begin(host)) { //http://esp32-rfid.local
     Serial.println("Error setting up MDNS responder!");
     while (1) {
       delay(1000);
@@ -272,11 +271,47 @@ void setup() {
   }
   Serial.println("mDNS responder started");
 
+  /*return index page which is stored in serverIndex */
+  server.on("/", HTTP_GET, []() {
+    server.sendHeader("Connection", "close");
+    server.send(200, "text/html", loginIndex);
+  });
+  server.on("/serverIndex", HTTP_GET, []() {
+    server.sendHeader("Connection", "close");
+    server.send(200, "text/html", serverIndex);
+  });
+  /*handling uploading firmware file */
+  server.on("/update", HTTP_POST, []() {
+    server.sendHeader("Connection", "close");
+    server.send(200, "text/plain", (Update.hasError()) ? "FAIL" : "OK");
+    ESP.restart();
+  }, []() {
+    HTTPUpload& upload = server.upload();
+    if (upload.status == UPLOAD_FILE_START) {
+      Serial.printf("Update: %s\n", upload.filename.c_str());
+      if (!Update.begin(UPDATE_SIZE_UNKNOWN)) { //start with max available size
+        Update.printError(Serial);
+      }
+    } else if (upload.status == UPLOAD_FILE_WRITE) {
+      /* flashing firmware to ESP*/
+      if (Update.write(upload.buf, upload.currentSize) != upload.currentSize) {
+        Update.printError(Serial);
+      }
+    } else if (upload.status == UPLOAD_FILE_END) {
+      if (Update.end(true)) { //true to set the size to the current progress
+        Serial.printf("Update feito com Sucesso: %u\nRebooting...\n", upload.totalSize);
+      } else {
+        Update.printError(Serial);
+      }
+    }
+  });
+  server.begin();
+
   // Port defaults to 3232
-  // ArduinoOTA.setPort(3232);
+  ArduinoOTA.setPort(3232);
 
   // Hostname defaults to esp3232-[MAC]
-  ArduinoOTA.setHostname("esp32ota");
+  ArduinoOTA.setHostname("ESP32-RFID");
 
   // No authentication by default
   ArduinoOTA.setPassword("loboalfa");
@@ -286,35 +321,39 @@ void setup() {
   // ArduinoOTA.setPasswordHash("21232f297a57a5a743894a0e4a801fc3");
 
   ArduinoOTA
-    .onStart([]() {
-      String type;
-      if (ArduinoOTA.getCommand() == U_FLASH)
-        type = "sketch";
-      else // U_SPIFFS
-        type = "filesystem";
+  .onStart([]() {
+    String type;
+    if (ArduinoOTA.getCommand() == U_FLASH)
+      type = "sketch";
+    else // U_SPIFFS
+      type = "filesystem";
 
-      // NOTE: if updating SPIFFS this would be the place to unmount SPIFFS using SPIFFS.end()
-      Serial.println("Start updating " + type);
-    })
-    .onEnd([]() {
-      Serial.println("\nEnd");
-    })
-    .onProgress([](unsigned int progress, unsigned int total) {
-      Serial.printf("Progress: %u%%\r", (progress / (total / 100)));
-    })
-    .onError([](ota_error_t error) {
-      Serial.printf("Error[%u]: ", error);
-      if (error == OTA_AUTH_ERROR) Serial.println("Auth Failed");
-      else if (error == OTA_BEGIN_ERROR) Serial.println("Begin Failed");
-      else if (error == OTA_CONNECT_ERROR) Serial.println("Connect Failed");
-      else if (error == OTA_RECEIVE_ERROR) Serial.println("Receive Failed");
-      else if (error == OTA_END_ERROR) Serial.println("End Failed");
-    });
+    // NOTE: if updating SPIFFS this would be the place to unmount SPIFFS using SPIFFS.end()
+    Serial.println("Iniciando a atualização " + type);
+  })
+  .onEnd([]() {
+    Serial.println("\nEnd");
+  })
+  .onProgress([](unsigned int progress, unsigned int total) {
+    Serial.printf("Progress: %u%%\r", (progress / (total / 100)));
+  })
+  .onError([](ota_error_t error) {
+    Serial.printf("Error[%u]: ", error);
+    if (error == OTA_AUTH_ERROR) Serial.println("Autenticação Falhou.");
+    else if (error == OTA_BEGIN_ERROR) Serial.println("Início Falhou.");
+    else if (error == OTA_CONNECT_ERROR) Serial.println("Conexão Falhou.");
+    else if (error == OTA_RECEIVE_ERROR) Serial.println("Recepção Falhou.");
+    else if (error == OTA_END_ERROR) Serial.println("Encerramento Falhou.");
+  });
 
   ArduinoOTA.begin();
 
+  Serial.println("Ready");
+  Serial.print("Endereço de IP: ");
+  Serial.println(WiFi.localIP());
+
   SPI.begin();         // O Módulo MFRC522 usa o protocolo SPI
-  
+
   mfrc522.PCD_Init();  // Inicializa o Módulo MFRC522
 
   // Se você definir o Ganho da Antena como Max, ele aumentará a distância de leitura
@@ -328,10 +367,12 @@ void setup() {
   // Ligar retroiluminação do LCD
   lcd.backlight();
 }
+
 ////////////////////////////////////////////////////// Main Loop ////////////////////////////////////////////////////
 void loop() {
 
   ArduinoOTA.handle();
+  server.handleClient();
 
   // Leitura do botão
   int botaoEstado = digitalRead(BotaoAbrirPorta);

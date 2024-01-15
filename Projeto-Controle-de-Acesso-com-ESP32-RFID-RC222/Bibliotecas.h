@@ -1,4 +1,4 @@
-#include <EEPROM.h>             // Nós vamos ler e escrever UIDs do PICC na EEPROM.
+#include <EEPROM.h>             // Nós vamos ler e escrever UIDs  do PICC na EEPROM.
 #include <SPI.h>                // O módulo RC522 utiliza o protocolo SPI.
 #include <MFRC522.h>            // Biblioteca para Dispositivos Mifare RC522
 #include <LiquidCrystal_I2C.h>
@@ -7,3 +7,7 @@
 #include <ArduinoOTA.h>
 #include <WiFi.h>
 #include <WiFiUdp.h>
+#include <SPIFFS.h>             // Função: Fornece acesso ao sistema de arquivos SPIFFS (SPI Flash File System), que permite armazenar e ler arquivos no flash da placa.
+#include <DNSServer.h>          // Função: Implementa um servidor DNS que pode ser usado em conjunto com a biblioteca ESPAsyncWebServer para criar servidores web.   https://github.com/zhouhan0126/DNSServer---esp32
+#include <WebServer.h>
+#include <Update.h>
