@@ -3,20 +3,49 @@
   Controle de Acesso por RFID
   Cadastramento por Cartão Mestre
   Autor : Robson Brasil
-  Dispositivo : ESP32 WROOM32
+  Dispositivo : ESP32 WROOM32 38 Pinos
   Módulo RFID RC-522
-  LCD I2C
-  Versão : 26 - Alfa
-  Última Modificação : 08/01/2024
+  LCD I2C 20x4
+  Versão : 32 - Alfa
+  Última Modificação : 02/09/2024
   Preferences--> Aditional boards Manager URLs:
                            http://arduino.esp8266.com/stable/package_esp8266com_index.json,
                            https://raw.githubusercontent.com/espressif/arduino-esp32/gh-pages/package_esp32_index.json
   Download Board ESP32 v.(x.x.x): (Obs. na versão 2.0.8 a biblioteca <MFRC522.h> está com problemas no ESP32)
   -------------------------------------------------------------------------------------------------------------------
   -------------------------------------------------------------------------------------------------------------------
-  This is a MFRC522 library example; for further details and other examples see: https://github.com/miguelbalboa/rfid
-  This example showing a complete Door Access Control System
-  Simple Work Flow (not limited to) :
+  Se apresentar esse erro "  c:\Users\TEU USÁRIO\Documents\Arduino\libraries\MFRC522\src\MFRC522Extended.cpp:824:44: error: ordered comparison of pointer with integer zero ('byte*' {aka 'unsigned char*'} and 'int')
+  824 |         if (backData != nullptr && backLen > 0) {
+      |                                    ~~~~~~~~^~~
+  c:\Users\TEU USÁRIO\Documents\Arduino\libraries\MFRC522\src\MFRC522Extended.cpp:847:84: error: ordered comparison of pointer with integer zero ('byte*' {aka 'unsigned char*'} and 'int')
+  847 |                 if (backData && backData != reinterpret_cast<byte*>(-1) && backLen > 0) {
+      |  "
+  O caminho do arquivo a ser corrigido é: "C:\Users\TEU USÁRIO\Documents\Arduino\libraries\MFRC522\src\MFRC522Extended.cpp"
+  
+  Basta Fazer como está aqui 
+  "Correção da Linha 824: 
+  if (backData != nullptr && *backLen > 0) {
+		if (*backLen < in.inf.size)
+			return STATUS_NO_ROOM;
+
+		*backLen = in.inf.size;
+		memcpy(backData, in.inf.data, in.inf.size);
+	}"
+
+  "Correção ad Linha 847 : 		
+  if (backData && backData != reinterpret_cast<byte*>(-1) && backLen && *backLen > 0) {
+			if ((*backLen + ackDataSize) > totalBackLen)
+				return STATUS_NO_ROOM;
+
+			memcpy(&(backData[*backLen]), ackData, ackDataSize);
+			*backLen += ackDataSize;
+		}"
+  
+  Este é um exemplo da biblioteca MFRC522; com implementação do Visor de Cristal Liquído e acrescentado WebServer OTA, 
+  para mais detalhes e outros exemplos, veja: https://github.com/miguelbalboa/rfid.
+
+  Este exemplo mostra um Sistema Completo de Controle de Acesso para Portas.
+  Fluxo de Trabalho Simples (não limitado a):
                       //                  +------------+
   +-----------------------------------------LER AS TAGS-------------------------------------+
   |                        +-----------------------------------------+                      |
@@ -53,9 +82,9 @@
   @license Liberado para o domínio público.
   Layout típico de pinos usados:
   -------------------------------------------------------------------------------------------------------------------
-         //  MFRC522      Arduino       Arduino   Arduino    Arduino          Arduino     ESP32
-          //Reader/PCD   Uno/101       Mega      Nano v3    Leonardo/Micro   Pro Micro
-  // Signal      Pin          Pin           Pin       Pin        Pin              Pin
+    MFRC522                 Arduino      Arduino   Arduino       Arduino       Arduino      ESP32
+              Reader/PCD    Uno/101       Mega     Nano v3    Leonardo/Micro  Pro Micro  ESP32-WROOM
+    Signal       Pino       GPIO          GPIO      GPIO          GPIO          GPIO        GPIO
   -------------------------------------------------------------------------------------------------------------------
   //RST/Reset   RST          9             5         D9         RESET/ICSP-5     RST         2
   //SPI SS      SDA(SS)      10            53        D10        10               10          5
@@ -66,10 +95,6 @@
 
 #include "Bibliotecas.h"
 #include "GPIOs.h"
-#include "LoginsSenhas.h"
-#include "VariaveisGlobais.h"
-#include "WebServerOTA.h"
-
 
 /*
   Em vez de um relé, você pode querer usar um servo. Os servos também podem bloquear e desbloquear fechaduras
@@ -85,6 +110,7 @@
   led Lembre-se de que, se você estiver indo para usar led de cátodo comum ou apenas leds separados, simplesmente
   comente #define COMMON_ANODE.
 */
+
 #define COMMON_ANODE
 
 #ifdef COMMON_ANODE
@@ -95,7 +121,7 @@
 #define LED_OFF LOW
 #endif
 
-int estadoBotao = 0;       // Variável para ler o estado do botao
+int estadoBotao = 0;  // Variável para ler o estado do botao
 
 boolean match = false;        // Inicializar a correspondência do cartão como falso
 boolean programMode = false;  // Inicializar modo de programação como falso
@@ -128,11 +154,12 @@ String messageStatic0 = "POR FAVOR";
 String messageStatic1 = "APROXIME SEU CARTAO!";
 
 /* Função para rolar o texto
-   A função aceita os seguintes argumentos:
-   row: Número da linha onde o texto será exibido
-   message: Mensagem para rolar
-   delayTime: Atraso entre cada deslocamento de caractere
-   ColunasLCD: Número de colunas do seu LCD*/
+    A função aceita os seguintes argumentos:
+    row: Número da linha onde o texto será exibido
+    message: Mensagem para rolar
+    delayTime: Atraso entre cada deslocamento de caractere
+    ColunasLCD: Número de colunas do seu LCD*/
+
 void scrollText(int row, String message, int delayTime, int ColunasLCD) {
   for (int i = 0; i < ColunasLCD; i++) {
     message = " " + message;
@@ -144,39 +171,25 @@ void scrollText(int row, String message, int delayTime, int ColunasLCD) {
     delay(delayTime);
   }
 }
+
 //Protótipos
 void initOutputInput();
 void initEEPROM();
-
-void initOutputInput() {
-  // Arduino Pin Configuration
-  pinMode(PortaAberta, INPUT_PULLUP);//Sensor de fim de curso, o RFID só lerá outro cartão, quando a porta for fechada
-  pinMode(LedVermelho, OUTPUT);
-  pinMode(LedVerde, OUTPUT);
-  pinMode(LedAzul, OUTPUT);
-  pinMode(BotaoWipe, INPUT_PULLUP);  // Habilitar o resistor pull-up do pino.
-  pinMode(Rele, OUTPUT);
-  pinMode(TagRecusada, OUTPUT);
-  pinMode(BotaoAbrirPorta, INPUT);
-  pinMode(Buzzer, OUTPUT);  //Definindo o pino buzzer como de saída.
-
-  // Tenha cuidado com o comportamento do circuito do relé durante a reinicialização ou desligamento do seu Arduino.
-  digitalWrite(Rele, HIGH);            // Certifique-se de que a porta esteja trancada
-  digitalWrite(LedVermelho, LED_OFF);  // Certifique-se de que o LED esteja desligado
-  digitalWrite(LedVerde, LED_OFF);     // Certifique-se de que o LED esteja desligado
-  digitalWrite(LedAzul, LED_OFF);      // Certifique-se de que o LED esteja desligado
-
-}
+void initSerialBegin();
+void VerificarBotao();
+void ProcessaLeituraCartao();
+void lcdSetCursor();
 
 void initEEPROM() {
-  /* Wipe Code - Se o botão (BotaoWipe) for pressionado durante a execução da configuração (ligada), a EEPROM
+    /* Wipe Code - Se o botão (BotaoWipe) for pressionado durante a execução da configuração (ligada), a EEPROM
      será apagada.*/
+
   if (digitalRead(BotaoWipe) == LOW) {  // Quando o botão for pressionado, o pino deve ficar baixo, o botão está conectado ao GND
     digitalWrite(LedVermelho, LED_ON);  // O LED vermelho fica aceso para informar o usuário que vamos apagar
     Serial.println("Botao de formatacao apertado");
     Serial.println("Voce tem 10 segundos para cancelar");
     Serial.println("Isso vai apagar todos os seus registros e nao tem como desfazer");
-    bool buttonState = monitorBotaoWipebutton(10000);             // Dê ao usuário tempo suficiente para cancelar a operação.
+    bool buttonState = monitorBotaoWipebutton(10000);            // Dê ao usuário tempo suficiente para cancelar a operação.
     if (buttonState == true && digitalRead(BotaoWipe) == LOW) {  // Se o botão ainda estiver pressionado, apaga a EEPROM.
       Serial.println("Inicio da formatacao da EEPROM");
       for (uint16_t x = 0; x < EEPROM.length(); x = x + 1) {  // Fim do loop do endereço da EEPROM
@@ -201,10 +214,12 @@ void initEEPROM() {
       digitalWrite(LedVermelho, LED_OFF);
     }
   }
-  /* Verificar se o cartão mestre foi definido, caso contrário permitir que o usuário escolha um cartão mestre
+
+    /* Verificar se o cartão mestre foi definido, caso contrário permitir que o usuário escolha um cartão mestre
      Isso também é útil para apenas redefinir o cartão mestre
      Você pode manter outros registros EEPROM, basta escrever outro número diferente de 143 no endereço EEPROM 1
      O endereço EEPROM 1 deve conter o número mágico '143'*/
+
   if (EEPROM.read(1) != 143) {
     Serial.println("Cartao Mestre nao definido");
     Serial.println("Leia um chip para definir cartao Mestre");
@@ -236,191 +251,50 @@ void initEEPROM() {
   EEPROM.commit();
 }
 
-///////////////////////////////////////////////////// Setup ////////////////////////////////////////////////////////
-void setup() {
-
-  EEPROM.begin(1024);
-  initOutputInput();
-  initEEPROM();
-
+void initSerialBegin(){
   // Protocolo de configuração
   Serial.begin(115200);  // Inicializar comunicações serial com o PC.
   while (!Serial);
-
-  // Connect to WiFi network
-  WiFi.begin(ssid, password);
-  Serial.println("");
-
-  // Wait for connection
-  while (WiFi.status() != WL_CONNECTED) {
-    delay(500);
-    Serial.print(".");
-  }
-  Serial.println("");
-  Serial.print("Connected to ");
-  Serial.println(ssid);
-  Serial.print("IP address: ");
-  Serial.println(WiFi.localIP());
-
-  /*use mdns for host name resolution*/
-  if (!MDNS.begin(host)) { //http://esp32-rfid.local
-    Serial.println("Error setting up MDNS responder!");
-    while (1) {
-      delay(1000);
-    }
-  }
-  Serial.println("mDNS responder started");
-
-  /*return index page which is stored in serverIndex */
-  server.on("/", HTTP_GET, []() {
-    server.sendHeader("Connection", "close");
-    server.send(200, "text/html", loginIndex);
-  });
-  server.on("/serverIndex", HTTP_GET, []() {
-    server.sendHeader("Connection", "close");
-    server.send(200, "text/html", serverIndex);
-  });
-  /*handling uploading firmware file */
-  server.on("/update", HTTP_POST, []() {
-    server.sendHeader("Connection", "close");
-    server.send(200, "text/plain", (Update.hasError()) ? "FAIL" : "OK");
-    ESP.restart();
-  }, []() {
-    HTTPUpload& upload = server.upload();
-    if (upload.status == UPLOAD_FILE_START) {
-      Serial.printf("Update: %s\n", upload.filename.c_str());
-      if (!Update.begin(UPDATE_SIZE_UNKNOWN)) { //start with max available size
-        Update.printError(Serial);
-      }
-    } else if (upload.status == UPLOAD_FILE_WRITE) {
-      /* flashing firmware to ESP*/
-      if (Update.write(upload.buf, upload.currentSize) != upload.currentSize) {
-        Update.printError(Serial);
-      }
-    } else if (upload.status == UPLOAD_FILE_END) {
-      if (Update.end(true)) { //true to set the size to the current progress
-        Serial.printf("Update feito com Sucesso: %u\nRebooting...\n", upload.totalSize);
-      } else {
-        Update.printError(Serial);
-      }
-    }
-  });
-  server.begin();
-
-  // Port defaults to 3232
-  ArduinoOTA.setPort(3232);
-
-  // Hostname defaults to esp3232-[MAC]
-  ArduinoOTA.setHostname("ESP32-RFID");
-
-  // No authentication by default
-  ArduinoOTA.setPassword("loboalfa");
-
-  // Password can be set with it's md5 value as well
-  // MD5(admin) = 21232f297a57a5a743894a0e4a801fc3
-  // ArduinoOTA.setPasswordHash("21232f297a57a5a743894a0e4a801fc3");
-
-  ArduinoOTA
-  .onStart([]() {
-    String type;
-    if (ArduinoOTA.getCommand() == U_FLASH)
-      type = "sketch";
-    else // U_SPIFFS
-      type = "filesystem";
-
-    // NOTE: if updating SPIFFS this would be the place to unmount SPIFFS using SPIFFS.end()
-    Serial.println("Iniciando a atualização " + type);
-  })
-  .onEnd([]() {
-    Serial.println("\nEnd");
-  })
-  .onProgress([](unsigned int progress, unsigned int total) {
-    Serial.printf("Progress: %u%%\r", (progress / (total / 100)));
-  })
-  .onError([](ota_error_t error) {
-    Serial.printf("Error[%u]: ", error);
-    if (error == OTA_AUTH_ERROR) Serial.println("Autenticação Falhou.");
-    else if (error == OTA_BEGIN_ERROR) Serial.println("Início Falhou.");
-    else if (error == OTA_CONNECT_ERROR) Serial.println("Conexão Falhou.");
-    else if (error == OTA_RECEIVE_ERROR) Serial.println("Recepção Falhou.");
-    else if (error == OTA_END_ERROR) Serial.println("Encerramento Falhou.");
-  });
-
-  ArduinoOTA.begin();
-
-  Serial.println("Ready");
-  Serial.print("Endereço de IP: ");
-  Serial.println(WiFi.localIP());
-
-  SPI.begin();         // O Módulo MFRC522 usa o protocolo SPI
-
-  mfrc522.PCD_Init();  // Inicializa o Módulo MFRC522
-
-  // Se você definir o Ganho da Antena como Max, ele aumentará a distância de leitura
-  // mfrc522.PCD_SetAntennaGain(mfrc522.RxGain_max); //<--Não consegui fazer funcionar na potência máxima
-
-  Serial.println("Controle de Acesso v.26 - Alfa");  // Para fins de depuração
-  ShowReaderDetails();                        // Mostrar detalhes do leitor de cartão PCD - MFRC522.
-
-  // Iniciar o LCD
-  lcd.begin();
-  // Ligar retroiluminação do LCD
-  lcd.backlight();
 }
 
-////////////////////////////////////////////////////// Main Loop ////////////////////////////////////////////////////
-void loop() {
-
-  ArduinoOTA.handle();
-  server.handleClient();
-
-  // Leitura do botão
-  int botaoEstado = digitalRead(BotaoAbrirPorta);
-  // Se o botão for pressionado, aciona o relé
-  if (botaoEstado == HIGH) {
-    digitalWrite(Rele, LOW);
-    delay(5000); // Aguarda 5 segundos
-    digitalWrite(Rele, HIGH);
-  }
-
-  lcd.setCursor(5, 0);
-  // Imprimir mensagem estática
-  lcd.print(messageStatic0);
-  // Defina o cursor na segunda coluna, primeira linha
-  lcd.setCursor(0, 1);
-  // Imprimir mensagem estática
-  lcd.print(messageStatic1);
+void ProcessaLeituraCartao() {
+  bool successRead = false;
 
   do {
     successRead = getID();  // Define a variável successRead como 1 quando conseguimos ler do leitor e como 0 caso contrário.
-    // Quando o dispositivo está em uso, se o botão de limpeza for pressionado por 10 segundos, inicialize a limpeza do cartão mestre
+
     if (digitalRead(BotaoWipe) == LOW) {  // Verifique se o botão está pressionado
-      // Visualize que a operação normal é interrompida ao pressionar o botão de limpeza. A cor vermelha é utilizada para indicar maior aviso ao usuário.
-      digitalWrite(LedVermelho, LED_ON);  // Certifique-se de que o LED está desligado
-      digitalWrite(LedVerde, LED_OFF);    // Certifique-se de que o LED está desligado
-      digitalWrite(LedAzul, LED_OFF);     // Certifique-se de que o LED está desligado
-      // Give some feedback
+      // Indicar que a operação normal é interrompida ao pressionar o botão de limpeza.
+      digitalWrite(LedVermelho, LED_ON);  // Certifique-se de que o LED vermelho está aceso
+      digitalWrite(LedVerde, LED_OFF);    // Certifique-se de que o LED verde está desligado
+      digitalWrite(LedAzul, LED_OFF);     // Certifique-se de que o LED azul está desligado
+      
       Serial.println("Botao de formatacao apertado");
-      Serial.println("O cartao Mestre sera apagado! em 10 segundos");
-      bool buttonState = monitorBotaoWipebutton(10000);             // Dar ao usuário tempo suficiente para cancelar a operação
+      Serial.println("O cartao Mestre sera apagado em 10 segundos");
+
+      bool buttonState = monitorBotaoWipebutton(10000);  // Dar ao usuário tempo suficiente para cancelar a operação
+
       if (buttonState == true && digitalRead(BotaoWipe) == LOW) {  // Se o botão ainda estiver pressionado, limpe a EEPROM.
-        EEPROM.write(1, 0);                                        // Resetar o número mágico.
+        EEPROM.write(1, 0);  // Resetar o número mágico.
         EEPROM.commit();
         Serial.println("Cartao Mestre desvinculado do dispositivo");
         Serial.println("Aperte o reset da placa para reprogramar o cartao Mestre");
-        while (1)
-          ;
+        while (1);  // Travar o código aqui até que o reset seja pressionado
       }
+
       Serial.println("Desvinculo do cartao Mestre cancelado");
     }
+
     if (programMode) {
-      cycleLeds();  // Modo de Programação exibe uma sequência de cores vermelha, verde e azul, aguardando a leitura de um novo cartão.
+      cycleLeds();  // Modo de Programação exibe uma sequência de cores
     } else {
-      normalModeOn();  // Modo normal, LED de energia azul aceso, todos os outros apagados
+      normalModeOn();  // Modo normal
     }
-  } while (!successRead);  // O programa não avançará enquanto não for obtida uma leitura bem-sucedida.
+
+  } while (!successRead);  // O loop continua até obter uma leitura bem-sucedida.
+
   if (programMode) {
-    if (isMaster(readCard)) {  // Quando estiver no modo de programa, verifique primeiro se o cartão mestre foi escaneado novamente para sair do modo de programa.
+    if (isMaster(readCard)) {  // Verifique se o cartão mestre foi escaneado novamente para sair do modo de programa.
       Serial.println("Leitura do cartao Mestre");
       Serial.println("Saindo do modo de programacao");
       Serial.println("-----------------------------");
@@ -444,7 +318,7 @@ void loop() {
       programMode = true;
       Serial.println("Ola Mestre - Modo de programacao iniciado");
       uint8_t count = EEPROM.read(0);  // Ler o primeiro byte da EEPROM
-      Serial.print("Existem ");        // Armazena o número de IDs na EEPROM
+      Serial.print("Existem ");        // Exibir número de IDs na EEPROM
       Serial.print(count);
       Serial.print(" registro(s) na EEPROM");
       Serial.println("");
@@ -454,22 +328,107 @@ void loop() {
     } else {
       if (findID(readCard)) {  // Se não, verifique se o cartão está na EEPROM
         lcd.setCursor(2, 3);
-        // print scrolling message
         lcd.print("Voce pode passar");
         Serial.println("Bem-vindo, voce pode passar");
         granted(300);  // Abrir a fechadura da porta por 300 ms
-      } else {         // Se não, mostrar que o ID não é válido
+      } else {  // Se não, mostrar que o ID não é válido
         Serial.println("Voce nao pode passar");
         lcd.setCursor(0, 3);
         lcd.print("Voce nao pode passar");
-        delay(5000);
-        lcd.clear();  // limpa a tela
+        delay(3000);
+        lcd.clear();  // Limpa a tela
         denied();
       }
     }
+  }  // Fim do else de if (isMaster(readCard))
+}
+
+void lcdSetCursor(){
+
+  lcd.setCursor(5, 0);
+  // Imprimir mensagem estática
+  lcd.print(messageStatic0);
+  // Defina o cursor na segunda coluna, primeira linha
+  lcd.setCursor(0, 1);
+  // Imprimir mensagem estática
+  lcd.print(messageStatic1);
+}
+
+///////////////////////////////////////////////////// Setup ////////////////////////////////////////////////////////
+
+void setup() {
+
+  EEPROM.begin(1024);
+  initOutputInput();
+  initEEPROM();
+  initSerialBegin();
+ 
+  SPI.begin();  // O Módulo MFRC522 usa o protocolo SPI
+
+  mfrc522.PCD_Init();  // Inicializa o Módulo MFRC522
+
+  // Se você definir o Ganho da Antena como Max, ele aumentará a distância de leitura
+  // mfrc522.PCD_SetAntennaGain(mfrc522.RxGain_max); //<--Não consegui fazer funcionar na potência máxima
+
+  Serial.println("Controle de Acesso v.30 - Alfa");  // Para fins de depuração
+  ShowReaderDetails();                               // Mostrar detalhes do leitor de cartão PCD - MFRC522.
+
+  // Iniciar o LCD
+  lcd.begin();
+  // Ligar retroiluminação do LCD
+  lcd.backlight();
+}
+
+////////////////////////////////////////////////////// Main Loop ////////////////////////////////////////////////////
+
+void loop() {
+
+  VerificarBotao();
+  ProcessaLeituraCartao();
+  lcdSetCursor();
+
+}    // Fim do void loop
+
+void initOutputInput() {
+  // Arduino Pin Configuration
+  pinMode(PortaAberta, INPUT_PULLUP);  //Sensor de fim de curso, o RFID só lerá outro cartão, quando a porta for fechada
+  pinMode(LedVermelho, OUTPUT);
+  pinMode(LedVerde, OUTPUT);
+  pinMode(LedAzul, OUTPUT);
+  pinMode(BotaoWipe, INPUT_PULLUP);  // Habilitar o resistor pull-up do pino.
+  pinMode(Rele, OUTPUT);
+  pinMode(BotaoAbrirPorta, INPUT_PULLUP);
+  pinMode(Buzzer, OUTPUT);  //Definindo o pino buzzer como de saída.
+
+  // Tenha cuidado com o comportamento do circuito do relé durante a reinicialização ou desligamento do seu Arduino.
+  digitalWrite(Rele, HIGH);            // Certifique-se de que a porta esteja trancada
+  digitalWrite(LedVermelho, LED_OFF);  // Certifique-se de que o LED esteja desligado
+  digitalWrite(LedVerde, LED_OFF);     // Certifique-se de que o LED esteja desligado
+  digitalWrite(LedAzul, LED_OFF);      // Certifique-se de que o LED esteja desligado
+}
+  
+void VerificarBotao() {
+  static unsigned long ultimaLeitura = 0;
+  const unsigned long debounceDelay = 50;  // 50ms para debounce
+
+  int estadoBotao = digitalRead(BotaoAbrirPorta);
+
+  if ((millis() - ultimaLeitura) > debounceDelay) {
+    if (estadoBotao == LOW) {
+      Serial.println("Botão pressionado. Acionando o relé...");
+      digitalWrite(Rele, LOW);  // Ativa o relé
+      delay(5000);              // Mantém o relé acionado por 5 segundos
+      digitalWrite(Rele, HIGH); // Desativa o relé
+      Serial.println("Relé desativado após 5 segundos.");
+    } else {
+      Serial.println("Botão não pressionado. Relé não acionado.");
+    }
+    ultimaLeitura = millis();
   }
 }
+
 //////////////////////////////////////////////// Acesso Permitido //////////////////////////////////////////////////
+
 void granted(uint16_t setDelay) {
   digitalWrite(LedAzul, LED_OFF);      // Desliga o LED azul
   digitalWrite(LedVermelho, LED_OFF);  // Desliga o LED vermelho
@@ -492,12 +451,13 @@ void granted(uint16_t setDelay) {
 
   lcd.clear();  // Limpa a tela do LCD
 }
+
 ///////////////////////////////////////////////// Accesso Negado ///////////////////////////////////////////////////
+
 void denied() {
   digitalWrite(LedVerde, LED_OFF);    // Certifique-se de que o LED verde está desligado
   digitalWrite(LedAzul, LED_OFF);     // Certifique-se de que o LED azul está desligado
   digitalWrite(LedVermelho, LED_ON);  // Certifique-se de que o LED vermelho está ligado
-  digitalWrite(TagRecusada, LED_ON);  // Certifique-se de que o LED verde está ligado
   digitalWrite(Rele, HIGH);           // Tranca a porta novamente
 
   digitalWrite(Buzzer, HIGH);
@@ -524,7 +484,9 @@ void denied() {
   delay(250);
   digitalWrite(Buzzer, LOW);
 }
+
 ////////////////////////////// Obter UID do PICC (Proximity Integrated Circuit Card) ////////////////////////////////
+
 uint8_t getID() {
   // Getting ready for Reading PICCs
   if (!mfrc522.PICC_IsNewCardPresent()) {  // Se um novo PICC for colocado no leitor RFID, continue.
@@ -533,9 +495,11 @@ uint8_t getID() {
   if (!mfrc522.PICC_ReadCardSerial()) {  // Uma vez que um PICC é colocado, obtenha o número de série e continue.
     return 0;
   }
+
   /* Existem PICCs Mifare que têm UID de 4 bytes ou 7 bytes. Cuidado ao usar PICCs de 7 bytes.
      Acredito que devemos assumir que todo PICC tem UID de 4 bytes
      Até que suportemos PICCs de 7 bytes.*/
+
   Serial.println("UID do chip lido:");
   for (uint8_t i = 0; i < 4; i++) {  //
     readCard[i] = mfrc522.uid.uidByte[i];
@@ -569,11 +533,12 @@ void ShowReaderDetails() {
     digitalWrite(LedVerde, LED_OFF);    // Certifique-se de que o LED verde está desligado.
     digitalWrite(LedAzul, LED_OFF);     // Certifique-se de que o LED azul está desligado.
     digitalWrite(LedVermelho, LED_ON);  // Ligar o LED vermelho
-    while (true)
-      ;  // Não prossiga.
+    while (true);  // Não prossiga.
   }
 }
+
 ////////////////////////////////////////////// LEDs (Modo de Programa) //////////////////////////////////////////////
+
 void cycleLeds() {
   digitalWrite(LedVermelho, LED_OFF);  // Certifique-se de que o LED vermelho está desligado.
   digitalWrite(LedVerde, LED_ON);      // Certifique-se de que o LED verde está ligado.
@@ -588,21 +553,27 @@ void cycleLeds() {
   digitalWrite(LedAzul, LED_OFF);     // Certifique-se de que o LED azul está desligado.
   delay(200);
 }
+
 ////////////////////////////////////////////// LEDs (Modo Normal) ///////////////////////////////////////////////////
+
 void normalModeOn() {
   digitalWrite(LedAzul, LED_ON);       // LED Azul LIGADO e pronto para ler o cartão
   digitalWrite(LedVermelho, LED_OFF);  // Certifique-se de que o LED vermelho está desligado.
   digitalWrite(LedVerde, LED_OFF);     // Certifique-se de que o LED verde está desligado.
   digitalWrite(Rele, HIGH);            // Certifique-se de que a porta está trancada.
 }
+
 /////////////////////////////////////////////// Ler um ID da EEPROM /////////////////////////////////////////////////
+
 void readID(uint8_t number) {
   uint8_t start = (number * 4) + 2;          // Descobrir a posição inicial
   for (uint8_t i = 0; i < 4; i++) {          // Repetir 4 vezes para obter os 4 Bytes
     storedCard[i] = EEPROM.read(start + i);  // Atribuir os valores lidos da EEPROM a uma matriz
   }
 }
+
 /////////////////////////////////////////////// Adicionar ID à EEPROM /////////////////////////////////////////////
+
 void writeID(byte a[]) {
   if (!findID(a)) {                    // Antes de escrever na EEPROM, verifique se já vimos este cartão antes!
     uint8_t num = EEPROM.read(0);      // Obter o número de espaços utilizados, posição 0 armazena o número de cartões de ID.
@@ -620,7 +591,9 @@ void writeID(byte a[]) {
     Serial.println("Erro! Tem alguma coisa errada com o ID do chip ou problema na EEPROM");
   }
 }
+
 ///////////////////////////////////////////// Remover ID da EEPROM ////////////////////////////////////////////////
+
 void deleteID(byte a[]) {
   if (!findID(a)) {  // Antes de excluir da EEPROM, verifique se temos este cartão!
     failedWrite();   // Se não
@@ -631,8 +604,7 @@ void deleteID(byte a[]) {
     uint8_t start;                 // = (num * 4) + 6; // Descobrir onde começa o próximo slot
     uint8_t looping;               // O número de vezes que o loop se repete
     uint8_t j;
-    uint8_t count = EEPROM.read(0);  // Ler o primeiro byte da EEPROM que armazena o número de cartões
-    slot = findIDSLOT(a);            // Descobrir o número do slot do cartão a ser excluído
+    slot = findIDSLOT(a);  // Descobrir o número do slot do cartão a ser excluído
     start = (slot * 4) + 2;
     looping = ((num - slot) * 4);
     num--;                                                  // Decrementar o contador em um
@@ -648,7 +620,9 @@ void deleteID(byte a[]) {
     }
   }
 }
+
 //////////////////////////////////////////////// Verificar Bytes ////////////////////////////////////////////////
+
 boolean checkTwo(byte a[], byte b[]) {
   if (a[0] != 0)                     // Certifique-se de que há algo na matriz primeiro
     match = true;                    // Assuma que eles correspondem inicialmente
@@ -662,7 +636,9 @@ boolean checkTwo(byte a[], byte b[]) {
     return false;  // Retornar falso
   }
 }
+
 ///////////////////////////////////////////////// Encontrar Slot /////////////////////////////////////////////////
+
 uint8_t findIDSLOT(byte find[]) {
   uint8_t count = EEPROM.read(0);         // Ler o primeiro byte da EEPROM
   for (uint8_t i = 1; i <= count; i++) {  // Loop uma vez para cada entrada na EEPROM
@@ -673,9 +649,11 @@ uint8_t findIDSLOT(byte find[]) {
       break;     // Pare de procurar, encontramos
     }
   }
-  return 0;      // Valor padrão indicando erro
+  return 0;  // Valor padrão indicando erro
 }
+
 ///////////////////////////////////////////// Encontrar ID na EEPROM /////////////////////////////////////////////
+
 boolean findID(byte find[]) {
   uint8_t count = EEPROM.read(0);         // Ler o primeiro byte da EEPROM
   for (uint8_t i = 1; i <= count; i++) {  // Loop uma vez para cada entrada na EEPROM
@@ -688,61 +666,69 @@ boolean findID(byte find[]) {
   }
   return false;
 }
+
 ///////////////////////////////////////// Escrito com "Sucesso" na EEPROM   //////////////////////////////////////
+
 // Pisca o LED verde 3 vezes para indicar uma gravação bem-sucedida na EEPROM
 void successWrite() {
   digitalWrite(LedAzul, LED_OFF);      // Certifique-se de que o LED azul está desligado.
   digitalWrite(LedVermelho, LED_OFF);  // Certifique-se de que o LED vermelho está desligado.
   digitalWrite(LedVerde, LED_OFF);     // Certifique-se de que o LED verde está desligado.
   delay(200);
-  digitalWrite(LedVerde, LED_ON);      // Certifique-se de que o LED verde está ligado.
+  digitalWrite(LedVerde, LED_ON);  // Certifique-se de que o LED verde está ligado.
   delay(200);
-  digitalWrite(LedVerde, LED_OFF);     // Certifique-se de que o LED verde está desligado.
+  digitalWrite(LedVerde, LED_OFF);  // Certifique-se de que o LED verde está desligado.
   delay(200);
-  digitalWrite(LedVerde, LED_ON);      // Certifique-se de que o LED verde está ligado.
+  digitalWrite(LedVerde, LED_ON);  // Certifique-se de que o LED verde está ligado.
   delay(200);
-  digitalWrite(LedVerde, LED_OFF);     // Certifique-se de que o LED verde está desligado.
+  digitalWrite(LedVerde, LED_OFF);  // Certifique-se de que o LED verde está desligado.
   delay(200);
-  digitalWrite(LedVerde, LED_ON);      // Certifique-se de que o LED verde está ligado.
+  digitalWrite(LedVerde, LED_ON);  // Certifique-se de que o LED verde está ligado.
   delay(200);
 }
+
 /////////////////////////////////////////// Escrita na EEPROM Falhou //////////////////////////////////////////////
+
 // Pisca o LED vermelho 3 vezes para indicar uma gravação malsucedida na EEPROM.
 void failedWrite() {
   digitalWrite(LedAzul, LED_OFF);      // Certifique-se de que o LED azul está desligado.
   digitalWrite(LedVermelho, LED_OFF);  // Certifique-se de que o LED vermelho está desligado.
   digitalWrite(LedVerde, LED_OFF);     // Certifique-se de que o LED verde está desligado.
   delay(200);
-  digitalWrite(LedVermelho, LED_ON);   // Certifique-se de que o LED vermelho está ligado.
+  digitalWrite(LedVermelho, LED_ON);  // Certifique-se de que o LED vermelho está ligado.
   delay(200);
   digitalWrite(LedVermelho, LED_OFF);  // Certifique-se de que o LED vermelho está desligado.
   delay(200);
-  digitalWrite(LedVermelho, LED_ON);   // Certifique-se de que o LED vermelho está ligado.
+  digitalWrite(LedVermelho, LED_ON);  // Certifique-se de que o LED vermelho está ligado.
   delay(200);
   digitalWrite(LedVermelho, LED_OFF);  // Certifique-se de que o LED vermelho está desligado.
   delay(200);
-  digitalWrite(LedVermelho, LED_ON);   // Certifique-se de que o LED vermelho está ligado.
+  digitalWrite(LedVermelho, LED_ON);  // Certifique-se de que o LED vermelho está ligado.
   delay(200);
 }
+
 ///////////////////////////////////////// Sucesso ao Remover UID da EEPROM ///////////////////////////////////////
+
 // Pisca o LED azul 3 vezes para indicar uma exclusão bem-sucedida na EEPROM.
 void successDelete() {
   digitalWrite(LedAzul, LED_OFF);      // Certifique-se de que o LED azul está desligado.
   digitalWrite(LedVermelho, LED_OFF);  // Certifique-se de que o LED vermelho está desligado.
   digitalWrite(LedVerde, LED_OFF);     // Certifique-se de que o LED verde está desligado.
   delay(200);
-  digitalWrite(LedAzul, LED_ON);       // Certifique-se de que o LED azul está ligado.
+  digitalWrite(LedAzul, LED_ON);  // Certifique-se de que o LED azul está ligado.
   delay(200);
-  digitalWrite(LedAzul, LED_OFF);      // Certifique-se de que o LED azul está desligado.
+  digitalWrite(LedAzul, LED_OFF);  // Certifique-se de que o LED azul está desligado.
   delay(200);
-  digitalWrite(LedAzul, LED_ON);       // Certifique-se de que o LED azul está ligado.
+  digitalWrite(LedAzul, LED_ON);  // Certifique-se de que o LED azul está ligado.
   delay(200);
-  digitalWrite(LedAzul, LED_OFF);      // Certifique-se de que o LED azul está desligado.
+  digitalWrite(LedAzul, LED_OFF);  // Certifique-se de que o LED azul está desligado.
   delay(200);
-  digitalWrite(LedAzul, LED_ON);       // Certifique-se de que o LED azul está dligado.
+  digitalWrite(LedAzul, LED_ON);  // Certifique-se de que o LED azul está dligado.
   delay(200);
 }
+
 /////////////////////////////// Verifica se o cartão lido é um CARTÃO MESTRE   ///////////////////////////////////
+
 // Verifique se o ID passado é o cartão mestre de programação.
 boolean isMaster(byte test[]) {
   if (checkTwo(test, masterCard))
@@ -751,14 +737,12 @@ boolean isMaster(byte test[]) {
     return false;
 }
 
-bool monitorBotaoWipebutton(uint32_t interval) {
-  uint32_t now = (uint32_t)millis();
-  while ((uint32_t)millis() - now < interval) {
-    // Verifique a cada meio segundo.
-    if (((uint32_t)millis() % 500) == 0) {
-      if (digitalRead(BotaoWipe) != LOW)
-        return false;
+bool monitorBotaoWipebutton(uint16_t timeout) {
+  uint32_t startTime = millis();
+  while ((millis() - startTime) < timeout) {
+    if (digitalRead(BotaoWipe) == HIGH) {
+      return false;  // Botão foi liberado
     }
   }
-  return true;
+  return true;  // Botão ainda está pressionado após o timeout
 }
