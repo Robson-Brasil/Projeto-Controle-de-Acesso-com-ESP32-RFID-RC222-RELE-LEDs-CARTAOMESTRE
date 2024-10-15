@@ -6,8 +6,9 @@
   Dispositivo : ESP32 WROOM32 38 Pinos
   Módulo RFID RC-522
   LCD I2C 20x4
-  Versão : 32 - Alfa
-  Última Modificação : 02/09/2024
+  Atualização via OTA
+  Versão : 1.0 - Realise Candidate
+  Última Modificação : 14/10/2024
   Preferences--> Aditional boards Manager URLs:
                            http://arduino.esp8266.com/stable/package_esp8266com_index.json,
                            https://raw.githubusercontent.com/espressif/arduino-esp32/gh-pages/package_esp32_index.json
@@ -41,10 +42,10 @@
 			*backLen += ackDataSize;
 		}"
   
-  Este é um exemplo da biblioteca MFRC522; com implementação do Visor de Cristal Liquído e acrescentado WebServer OTA, 
+  Este é um projeto da biblioteca MFRC522; com implementação do Visor de Cristal Liquído e acrescentado WebServer OTA, 
   para mais detalhes e outros exemplos, veja: https://github.com/miguelbalboa/rfid.
 
-  Este exemplo mostra um Sistema Completo de Controle de Acesso para Portas.
+  Este projeto mostra um Sistema Completo de Controle de Acesso para Portas.
   Fluxo de Trabalho Simples (não limitado a):
                       //                  +------------+
   +-----------------------------------------LER AS TAGS-------------------------------------+
@@ -53,21 +54,21 @@
   |                        |                                         |                      |
   |                   +----v-----+                             +-----v-----+                |
   |                   |TAG MESTRE|                             |OUTRAS TAGS|                |
-  |                   +--+-------+                           +---------------+              |
+  |                   +----+-----+                           +---------------+              |
   |                        |                                 |               |              |
   |                        |                                 |               |              |
-  |                   +----v----+                       +----v----+    +-----v-----+        |
-  |        +----------+LER  TAGS+------------+          |TAG CADAS|    |TAG    DESC|        |
-  |        |          +----+----+            |          +----+----+    +-----+-----+        |
+  |                   +----v----+                    +-------v-------+ +-----v-----+        |
+  |        +----------+LER  TAGS+------------+       |TAG CADASTRADAS| |TAG    DESC|        |
+  |        |          +----+----+            |       +-------+-------+ +-----+-----+        |
   |        |               |                 |               |               |              |
   |  +-----v----+   +------v-------+   +-----v-----+   +-----v------+  +-----v-----+        |
   |  |TAG MESTRE|   |TAG CADASTRADA|   |TAG    DESC|  |ACESSO ACEITO|  |ACESSO NEGA|        |
-  |  +----------+   +-------+------+   +-----+-----+   +-----+------+  +-----+-----+        |
-  |                         |                |               |               |              |
-  |      +----+       +-----v-----+      +---v---+           |               +-------------->
-  +------+SAIR|       |DELETAR DA |      |ADD  NA|           |                              |
-  |      +----+       |  EEPROM   |      | EEPROM|           |                              |
-  --------------------+-----------+------+-------+           +------------------------------+
+  |  +----------+   +------+-------+   +-----+-----+  +------+------+  +-----+-----+        |
+  |                        |                 |               |               |              |
+  |      +----+      +-----v-----+       +---v---+           |               +-------------->
+  +------>SAIR|      |DELETAR  DA|       |ADD  NA|           |                              |
+  |      +----+      |  EEPROM   |       | EEPROM|           |                              |
+  -------------------+-----------+-------+-------+           +------------------------------>
   Use um cartão mestre que funcionará como programador, então você poderá escolher quem terá acesso ou não.
 
   Interface de usuário fácil
@@ -95,6 +96,7 @@
 
 #include "Bibliotecas.h"
 #include "GPIOs.h"
+#include "LoginsSenhas.h"
 
 /*
   Em vez de um relé, você pode querer usar um servo. Os servos também podem bloquear e desbloquear fechaduras
@@ -179,6 +181,82 @@ void initSerialBegin();
 void VerificarBotao();
 void ProcessaLeituraCartao();
 void lcdSetCursor();
+void initWiFiConectado();
+void initOTA();
+
+void initOTA(){
+  // Port defaults to 3232
+  ArduinoOTA.setPort(8282); //Escolhe a porta que você preferir
+
+  // Hostname defaults to esp3232-[MAC]
+  ArduinoOTA.setHostname("ESP32-RFID");
+
+  // No authentication by default
+  ArduinoOTA.setPassword("Coloca Aqui uma senha da tua escolha");
+
+  // Password can be set with it's md5 value as well
+  // MD5(admin) = 21232f297a57a5a743894a0e4a801fc3
+  // ArduinoOTA.setPasswordHash("21232f297a57a5a743894a0e4a801fc3");
+
+  ArduinoOTA
+    .onStart([]() {
+      String type;
+      if (ArduinoOTA.getCommand() == U_FLASH) {
+        type = "sketch";
+      } else {  // U_SPIFFS
+        type = "filesystem";
+      }
+
+      // NOTE: if updating SPIFFS this would be the place to unmount SPIFFS using SPIFFS.end()
+      Serial.println("Start updating " + type);
+    })
+    .onEnd([]() {
+      Serial.println("\nEnd");
+    })
+    .onProgress([](unsigned int progress, unsigned int total) {
+      Serial.printf("Progress: %u%%\r", (progress / (total / 100)));
+    })
+    .onError([](ota_error_t error) {
+      Serial.printf("Error[%u]: ", error);
+      if (error == OTA_AUTH_ERROR) {
+        Serial.println("Auth Failed");
+      } else if (error == OTA_BEGIN_ERROR) {
+        Serial.println("Begin Failed");
+      } else if (error == OTA_CONNECT_ERROR) {
+        Serial.println("Connect Failed");
+      } else if (error == OTA_RECEIVE_ERROR) {
+        Serial.println("Receive Failed");
+      } else if (error == OTA_END_ERROR) {
+        Serial.println("End Failed");
+      }
+    });
+
+  ArduinoOTA.begin();
+
+  Serial.println("Conectado");
+  Serial.print("Endereço de IP: ");
+  Serial.println(WiFi.localIP());
+}
+
+void initWiFiConectado(){
+  WiFi.mode(WIFI_STA);
+  WiFi.begin(ssid, password);
+  unsigned long startAttemptTime = millis();
+  unsigned long timeout = 3000; // Timeout inicial de 5 segundos
+
+  while (WiFi.status() != WL_CONNECTED) {
+    if (millis() - startAttemptTime > timeout) {
+      Serial.println("Tentando se conectar novamente ao WiFi...");
+      WiFi.disconnect();
+      WiFi.begin(ssid, password);
+      startAttemptTime = millis(); // Reiniciar o timer
+      timeout += 3000; // Aumentar o timeout a cada tentativa (opcional)
+    }
+    delay(200); // Pequeno atraso para evitar sobrecarga na CPU
+  }
+
+  Serial.println("Conectado ao WiFi!");
+}
 
 void initEEPROM() {
     /* Wipe Code - Se o botão (BotaoWipe) for pressionado durante a execução da configuração (ligada), a EEPROM
@@ -362,15 +440,17 @@ void setup() {
   initOutputInput();
   initEEPROM();
   initSerialBegin();
+  initWiFiConectado();
+  initOTA();
  
   SPI.begin();  // O Módulo MFRC522 usa o protocolo SPI
 
   mfrc522.PCD_Init();  // Inicializa o Módulo MFRC522
 
   // Se você definir o Ganho da Antena como Max, ele aumentará a distância de leitura
-  // mfrc522.PCD_SetAntennaGain(mfrc522.RxGain_max); //<--Não consegui fazer funcionar na potência máxima
+  mfrc522.PCD_SetAntennaGain(mfrc522.RxGain_max); //<--Não consegui fazer funcionar na potência máxima
 
-  Serial.println("Controle de Acesso v.30 - Alfa");  // Para fins de depuração
+  Serial.println("Controle de Acesso V.1.0 - Realise Candidate");  // Para fins de depuração
   ShowReaderDetails();                               // Mostrar detalhes do leitor de cartão PCD - MFRC522.
 
   // Iniciar o LCD
@@ -383,9 +463,9 @@ void setup() {
 
 void loop() {
 
-  VerificarBotao();
   ProcessaLeituraCartao();
   lcdSetCursor();
+  ArduinoOTA.handle();
 
 }    // Fim do void loop
 
@@ -405,26 +485,6 @@ void initOutputInput() {
   digitalWrite(LedVermelho, LED_OFF);  // Certifique-se de que o LED esteja desligado
   digitalWrite(LedVerde, LED_OFF);     // Certifique-se de que o LED esteja desligado
   digitalWrite(LedAzul, LED_OFF);      // Certifique-se de que o LED esteja desligado
-}
-  
-void VerificarBotao() {
-  static unsigned long ultimaLeitura = 0;
-  const unsigned long debounceDelay = 50;  // 50ms para debounce
-
-  int estadoBotao = digitalRead(BotaoAbrirPorta);
-
-  if ((millis() - ultimaLeitura) > debounceDelay) {
-    if (estadoBotao == LOW) {
-      Serial.println("Botão pressionado. Acionando o relé...");
-      digitalWrite(Rele, LOW);  // Ativa o relé
-      delay(5000);              // Mantém o relé acionado por 5 segundos
-      digitalWrite(Rele, HIGH); // Desativa o relé
-      Serial.println("Relé desativado após 5 segundos.");
-    } else {
-      Serial.println("Botão não pressionado. Relé não acionado.");
-    }
-    ultimaLeitura = millis();
-  }
 }
 
 //////////////////////////////////////////////// Acesso Permitido //////////////////////////////////////////////////
@@ -556,11 +616,47 @@ void cycleLeds() {
 
 ////////////////////////////////////////////// LEDs (Modo Normal) ///////////////////////////////////////////////////
 
+// Variáveis globais para debounce e controle do tempo do relé
+unsigned long lastDebounceTime = 0;
+unsigned long debounceDelay = 50;     // Tempo de debounce (50 ms)
+bool lastButtonState = HIGH;          // Estado anterior do botão
+bool buttonPressed = false;           // Indica se o botão foi pressionado
+unsigned long releDestravarTime = 0;  // Tempo para destravar o relé
+unsigned long releDelay = 1500;       // Tempo que o relé ficará destravado (1.5s)
+bool releAtivo = false;               // Estado do relé (porta destravada)
+
 void normalModeOn() {
   digitalWrite(LedAzul, LED_ON);       // LED Azul LIGADO e pronto para ler o cartão
   digitalWrite(LedVermelho, LED_OFF);  // Certifique-se de que o LED vermelho está desligado.
   digitalWrite(LedVerde, LED_OFF);     // Certifique-se de que o LED verde está desligado.
-  digitalWrite(Rele, HIGH);            // Certifique-se de que a porta está trancada.
+
+  // Leitura do estado atual do botão
+  bool reading = digitalRead(BotaoAbrirPorta);
+
+  // Implementação do debounce para evitar leituras erradas de múltiplos pressionamentos
+  if (reading != lastButtonState) {
+    lastDebounceTime = millis();  // Atualiza o tempo de debounce quando o estado muda
+  }
+
+  if ((millis() - lastDebounceTime) > debounceDelay) {
+    // Verifica se o botão foi pressionado (estado LOW após debounce)
+    if (reading == LOW && !buttonPressed && !releAtivo) {
+      buttonPressed = true;           // Indica que o botão foi pressionado
+      releAtivo = true;               // Ativa o relé (destrava a porta)
+      digitalWrite(Rele, LOW);        // Destrava a porta
+      releDestravarTime = millis();   // Armazena o tempo em que o relé foi destravado
+    }
+  }
+
+  // Se o relé está ativo e o tempo de destravamento passou, trava a porta novamente
+  if (releAtivo && (millis() - releDestravarTime >= releDelay)) {
+    digitalWrite(Rele, HIGH);  // Trava a porta
+    releAtivo = false;         // Marca que o relé não está mais ativo
+    buttonPressed = false;     // Reseta o estado do botão para permitir nova ativação
+  }
+
+  // Atualiza o último estado do botão
+  lastButtonState = reading;
 }
 
 /////////////////////////////////////////////// Ler um ID da EEPROM /////////////////////////////////////////////////

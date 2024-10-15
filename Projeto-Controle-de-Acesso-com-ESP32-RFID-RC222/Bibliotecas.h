@@ -3,3 +3,7 @@
 #include <MFRC522.h>            // Biblioteca para Dispositivos Mifare RC522
 #include <LiquidCrystal_I2C.h>
 #include <Wire.h>
+#include <ESPmDNS.h>
+#include <NetworkUdp.h>
+#include <ArduinoOTA.h>
+#include <WiFi.h>
