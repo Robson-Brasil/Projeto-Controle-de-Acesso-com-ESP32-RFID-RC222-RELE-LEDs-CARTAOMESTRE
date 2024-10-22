@@ -175,24 +175,25 @@ void scrollText(int row, String message, int delayTime, int ColunasLCD) {
 }
 
 //Protótipos
-void initOutputInput();
+void initOTA();
+void initWiFiConectado();
 void initEEPROM();
 void initSerialBegin();
-void VerificarBotao();
 void ProcessaLeituraCartao();
 void lcdSetCursor();
-void initWiFiConectado();
-void initOTA();
+void EstadoWiFi();
+void initOutputInput();
 
-void initOTA(){
+//Inicio de todas as funções
+void initOTA() {
   // Port defaults to 3232
-  ArduinoOTA.setPort(8282); //Escolhe a porta que você preferir
+  ArduinoOTA.setPort(8282);  // Escolhe a porta que você preferir
 
   // Hostname defaults to esp3232-[MAC]
-  ArduinoOTA.setHostname("ESP32-RFID");
+  ArduinoOTA.setHostname("ESP32-RFID");  // Escolhe um note para o teu dispositivo
 
   // No authentication by default
-  ArduinoOTA.setPassword("Coloca Aqui uma senha da tua escolha");
+  ArduinoOTA.setPassword("Escolhe uma senha e coloca aqui");  // Coloca uma senha para deixar o OTA seguro
 
   // Password can be set with it's md5 value as well
   // MD5(admin) = 21232f297a57a5a743894a0e4a801fc3
@@ -208,26 +209,26 @@ void initOTA(){
       }
 
       // NOTE: if updating SPIFFS this would be the place to unmount SPIFFS using SPIFFS.end()
-      Serial.println("Start updating " + type);
+      Serial.println("Iniciando atualização " + type);
     })
     .onEnd([]() {
       Serial.println("\nEnd");
     })
     .onProgress([](unsigned int progress, unsigned int total) {
-      Serial.printf("Progress: %u%%\r", (progress / (total / 100)));
+      Serial.printf("Progresso: %u%%\r", (progress / (total / 100)));
     })
     .onError([](ota_error_t error) {
-      Serial.printf("Error[%u]: ", error);
+      Serial.printf("Erro[%u]: ", error);
       if (error == OTA_AUTH_ERROR) {
-        Serial.println("Auth Failed");
+        Serial.println("Falha na autenticação");
       } else if (error == OTA_BEGIN_ERROR) {
-        Serial.println("Begin Failed");
+        Serial.println("Falha ao iniciar");
       } else if (error == OTA_CONNECT_ERROR) {
-        Serial.println("Connect Failed");
+        Serial.println("Falha na conexão");
       } else if (error == OTA_RECEIVE_ERROR) {
-        Serial.println("Receive Failed");
+        Serial.println("Falha ao receber");
       } else if (error == OTA_END_ERROR) {
-        Serial.println("End Failed");
+        Serial.println("Falha ao finalizar");
       }
     });
 
@@ -238,28 +239,30 @@ void initOTA(){
   Serial.println(WiFi.localIP());
 }
 
-void initWiFiConectado(){
+unsigned long wifiCheckInterval = 10000;  // Intervalo para verificar o WiFi (10 segundos)
+unsigned long lastWifiCheckTime = 0;
+
+void initWiFiConectado() {
   WiFi.mode(WIFI_STA);
   WiFi.begin(ssid, password);
   unsigned long startAttemptTime = millis();
-  unsigned long timeout = 3000; // Timeout inicial de 5 segundos
+  unsigned long timeout = 3000;  // Timeout de 10 segundos para tentativas de conexão
 
-  while (WiFi.status() != WL_CONNECTED) {
-    if (millis() - startAttemptTime > timeout) {
-      Serial.println("Tentando se conectar novamente ao WiFi...");
-      WiFi.disconnect();
-      WiFi.begin(ssid, password);
-      startAttemptTime = millis(); // Reiniciar o timer
-      timeout += 3000; // Aumentar o timeout a cada tentativa (opcional)
-    }
-    delay(200); // Pequeno atraso para evitar sobrecarga na CPU
+  while (WiFi.status() != WL_CONNECTED && millis() - startAttemptTime < timeout) {
+    delay(200);  // Pequeno atraso para evitar sobrecarga na CPU
   }
 
-  Serial.println("Conectado ao WiFi!");
+  if (WiFi.status() == WL_CONNECTED) {
+    Serial.println("Conectado ao WiFi!");
+  } else {
+    Serial.println("Não foi possível conectar ao WiFi. Continuando sem conexão...");
+  }
+
+  // Aqui você pode adicionar o código para iniciar o restante do programa
 }
 
 void initEEPROM() {
-    /* Wipe Code - Se o botão (BotaoWipe) for pressionado durante a execução da configuração (ligada), a EEPROM
+  /* Wipe Code - Se o botão (BotaoWipe) for pressionado durante a execução da configuração (ligada), a EEPROM
      será apagada.*/
 
   if (digitalRead(BotaoWipe) == LOW) {  // Quando o botão for pressionado, o pino deve ficar baixo, o botão está conectado ao GND
@@ -293,7 +296,7 @@ void initEEPROM() {
     }
   }
 
-    /* Verificar se o cartão mestre foi definido, caso contrário permitir que o usuário escolha um cartão mestre
+  /* Verificar se o cartão mestre foi definido, caso contrário permitir que o usuário escolha um cartão mestre
      Isso também é útil para apenas redefinir o cartão mestre
      Você pode manter outros registros EEPROM, basta escrever outro número diferente de 143 no endereço EEPROM 1
      O endereço EEPROM 1 deve conter o número mágico '143'*/
@@ -329,10 +332,11 @@ void initEEPROM() {
   EEPROM.commit();
 }
 
-void initSerialBegin(){
+void initSerialBegin() {
   // Protocolo de configuração
   Serial.begin(115200);  // Inicializar comunicações serial com o PC.
-  while (!Serial);
+  while (!Serial)
+    ;
 }
 
 void ProcessaLeituraCartao() {
@@ -346,18 +350,19 @@ void ProcessaLeituraCartao() {
       digitalWrite(LedVermelho, LED_ON);  // Certifique-se de que o LED vermelho está aceso
       digitalWrite(LedVerde, LED_OFF);    // Certifique-se de que o LED verde está desligado
       digitalWrite(LedAzul, LED_OFF);     // Certifique-se de que o LED azul está desligado
-      
+
       Serial.println("Botao de formatacao apertado");
       Serial.println("O cartao Mestre sera apagado em 10 segundos");
 
       bool buttonState = monitorBotaoWipebutton(10000);  // Dar ao usuário tempo suficiente para cancelar a operação
 
       if (buttonState == true && digitalRead(BotaoWipe) == LOW) {  // Se o botão ainda estiver pressionado, limpe a EEPROM.
-        EEPROM.write(1, 0);  // Resetar o número mágico.
+        EEPROM.write(1, 0);                                        // Resetar o número mágico.
         EEPROM.commit();
         Serial.println("Cartao Mestre desvinculado do dispositivo");
         Serial.println("Aperte o reset da placa para reprogramar o cartao Mestre");
-        while (1);  // Travar o código aqui até que o reset seja pressionado
+        while (1)
+          ;  // Travar o código aqui até que o reset seja pressionado
       }
 
       Serial.println("Desvinculo do cartao Mestre cancelado");
@@ -409,7 +414,7 @@ void ProcessaLeituraCartao() {
         lcd.print("Voce pode passar");
         Serial.println("Bem-vindo, voce pode passar");
         granted(300);  // Abrir a fechadura da porta por 300 ms
-      } else {  // Se não, mostrar que o ID não é válido
+      } else {         // Se não, mostrar que o ID não é válido
         Serial.println("Voce nao pode passar");
         lcd.setCursor(0, 3);
         lcd.print("Voce nao pode passar");
@@ -421,7 +426,7 @@ void ProcessaLeituraCartao() {
   }  // Fim do else de if (isMaster(readCard))
 }
 
-void lcdSetCursor(){
+void lcdSetCursor() {
 
   lcd.setCursor(5, 0);
   // Imprimir mensagem estática
@@ -432,42 +437,17 @@ void lcdSetCursor(){
   lcd.print(messageStatic1);
 }
 
-///////////////////////////////////////////////////// Setup ////////////////////////////////////////////////////////
-
-void setup() {
-
-  EEPROM.begin(1024);
-  initOutputInput();
-  initEEPROM();
-  initSerialBegin();
-  initWiFiConectado();
-  initOTA();
- 
-  SPI.begin();  // O Módulo MFRC522 usa o protocolo SPI
-
-  mfrc522.PCD_Init();  // Inicializa o Módulo MFRC522
-
-  // Se você definir o Ganho da Antena como Max, ele aumentará a distância de leitura
-  mfrc522.PCD_SetAntennaGain(mfrc522.RxGain_max); //<--Não consegui fazer funcionar na potência máxima
-
-  Serial.println("Controle de Acesso V.1.0 - Realise Candidate");  // Para fins de depuração
-  ShowReaderDetails();                               // Mostrar detalhes do leitor de cartão PCD - MFRC522.
-
-  // Iniciar o LCD
-  lcd.begin();
-  // Ligar retroiluminação do LCD
-  lcd.backlight();
+void EstadoWiFi() {
+  // Verifica o estado do WiFi periodicamente
+  if (millis() - lastWifiCheckTime > wifiCheckInterval) {
+    if (WiFi.status() != WL_CONNECTED) {
+      Serial.println("Tentando reconectar ao WiFi...");
+      WiFi.disconnect();
+      WiFi.begin(ssid, password);
+    }
+    lastWifiCheckTime = millis();  // Atualiza o tempo da última verificação
+  }
 }
-
-////////////////////////////////////////////////////// Main Loop ////////////////////////////////////////////////////
-
-void loop() {
-
-  ProcessaLeituraCartao();
-  lcdSetCursor();
-  ArduinoOTA.handle();
-
-}    // Fim do void loop
 
 void initOutputInput() {
   // Arduino Pin Configuration
@@ -478,7 +458,7 @@ void initOutputInput() {
   pinMode(BotaoWipe, INPUT_PULLUP);  // Habilitar o resistor pull-up do pino.
   pinMode(Rele, OUTPUT);
   pinMode(BotaoAbrirPorta, INPUT_PULLUP);
-  pinMode(Buzzer, OUTPUT);  //Definindo o pino buzzer como de saída.
+  pinMode(Buzzer, OUTPUT);  // Definindo o pino buzzer como de saída.
 
   // Tenha cuidado com o comportamento do circuito do relé durante a reinicialização ou desligamento do seu Arduino.
   digitalWrite(Rele, HIGH);            // Certifique-se de que a porta esteja trancada
@@ -494,8 +474,11 @@ void granted(uint16_t setDelay) {
   digitalWrite(LedVermelho, LED_OFF);  // Desliga o LED vermelho
   digitalWrite(LedVerde, LED_ON);      // Liga o LED verde
   digitalWrite(Rele, LOW);             // Destrava a porta
-  delay(setDelay);                     // Mantém a porta destravada pelo tempo especificado
-  digitalWrite(Rele, HIGH);            // Trava a porta novamente
+  digitalWrite(Buzzer, HIGH);
+  delay(250);
+  digitalWrite(Buzzer, LOW);
+  delay(setDelay);           // Mantém a porta destravada pelo tempo especificado
+  digitalWrite(Rele, HIGH);  // Trava a porta novamente
 
   // Mantém o acesso liberado até que o sensor da porta seja acionado
   while (digitalRead(PortaAberta)) {
@@ -561,7 +544,7 @@ uint8_t getID() {
      Até que suportemos PICCs de 7 bytes.*/
 
   Serial.println("UID do chip lido:");
-  for (uint8_t i = 0; i < 4; i++) {  //
+  for (uint8_t i = 0; i < 4; i++) {
     readCard[i] = mfrc522.uid.uidByte[i];
     Serial.print(readCard[i], HEX);
     lcd.setCursor(0, 2);
@@ -593,7 +576,8 @@ void ShowReaderDetails() {
     digitalWrite(LedVerde, LED_OFF);    // Certifique-se de que o LED verde está desligado.
     digitalWrite(LedAzul, LED_OFF);     // Certifique-se de que o LED azul está desligado.
     digitalWrite(LedVermelho, LED_ON);  // Ligar o LED vermelho
-    while (true);  // Não prossiga.
+    while (true)
+      ;  // Não prossiga.
   }
 }
 
@@ -627,8 +611,8 @@ bool releAtivo = false;               // Estado do relé (porta destravada)
 
 void normalModeOn() {
   digitalWrite(LedAzul, LED_ON);       // LED Azul LIGADO e pronto para ler o cartão
-  digitalWrite(LedVermelho, LED_OFF);  // Certifique-se de que o LED vermelho está desligado.
-  digitalWrite(LedVerde, LED_OFF);     // Certifique-se de que o LED verde está desligado.
+  digitalWrite(LedVermelho, LED_OFF);  // Certifique-se de que o LED vermelho está desligado
+  digitalWrite(LedVerde, LED_OFF);     // Certifique-se de que o LED verde está desligado
 
   // Leitura do estado atual do botão
   bool reading = digitalRead(BotaoAbrirPorta);
@@ -641,10 +625,20 @@ void normalModeOn() {
   if ((millis() - lastDebounceTime) > debounceDelay) {
     // Verifica se o botão foi pressionado (estado LOW após debounce)
     if (reading == LOW && !buttonPressed && !releAtivo) {
-      buttonPressed = true;           // Indica que o botão foi pressionado
-      releAtivo = true;               // Ativa o relé (destrava a porta)
-      digitalWrite(Rele, LOW);        // Destrava a porta
-      releDestravarTime = millis();   // Armazena o tempo em que o relé foi destravado
+      buttonPressed = true;          // Indica que o botão foi pressionado
+      releAtivo = true;              // Ativa o relé (destrava a porta)
+      digitalWrite(Rele, LOW);       // Destrava a porta
+      releDestravarTime = millis();  // Armazena o tempo em que o relé foi destravado
+
+      // Pisca o LED Verde e aciona o Buzzer em sincronia 2x
+      for (int i = 0; i < 2; i++) {
+        digitalWrite(LedVerde, LED_ON);
+        digitalWrite(Buzzer, HIGH);  // Liga o Buzzer
+        delay(200);                  // Tempo de piscada e buzina
+        digitalWrite(LedVerde, LED_OFF);
+        digitalWrite(Buzzer, LOW);  // Desliga o Buzzer
+        delay(200);                 // Tempo entre piscadas
+      }
     }
   }
 
@@ -842,3 +836,37 @@ bool monitorBotaoWipebutton(uint16_t timeout) {
   }
   return true;  // Botão ainda está pressionado após o timeout
 }
+
+///////////////////////////////////////////////////// Setup ////////////////////////////////////////////////////////
+
+void setup() {
+
+  EEPROM.begin(1024);
+  initOutputInput();
+  initEEPROM();
+  initSerialBegin();
+  initWiFiConectado();
+  initOTA();
+
+  normalModeOn();  // Exemplo de chamada à sua função principal
+  SPI.begin();  // O Módulo MFRC522 usa o protocolo SPI
+  mfrc522.PCD_Init();  // Inicializa o Módulo MFRC522
+  // Se você definir o Ganho da Antena como Max, ele aumentará a distância de leitura
+  mfrc522.PCD_SetAntennaGain(mfrc522.RxGain_max);  //<--Não consegui fazer funcionar na potência máxima
+  Serial.println("Controle de Acesso V.1.0 - Realise Candidate");  // Para fins de depuração
+  ShowReaderDetails();  // Mostrar detalhes do leitor de cartão PCD - MFRC522.
+  // Iniciar o LCD
+  lcd.begin();
+  // Ligar retroiluminação do LCD
+  lcd.backlight();
+}
+
+////////////////////////////////////////////////////// Main Loop ////////////////////////////////////////////////////
+
+void loop() {
+
+  ProcessaLeituraCartao();
+  lcdSetCursor();
+  ArduinoOTA.handle();
+  EstadoWiFi();
+}  // Fim do void loop
