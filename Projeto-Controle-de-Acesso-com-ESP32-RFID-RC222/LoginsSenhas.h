@@ -1,4 +1,4 @@
 // Configurações do WIFI
 
-const char* ssid =      "Coloca aqui a tua rede Wi-Fi";   // SSID nome da rede WI-FI que deseja se conectar
-const char* password =  "Coloca aqui a senha da tua rede Wi-Fi"; // Senha da rede WI-FI que deseja se conectar
+const char* ssid =      "VIVOFIBRA-8F58";   // SSID nome da rede WI-FI que deseja se conectar
+const char* password =  "67656787C9"; // Senha da rede WI-FI que deseja se conectar
