@@ -1,0 +1,406 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>OneCircuit - Access Control System</title>
+<script src="https://unpkg.com/vis-network/standalone/umd/vis-network.min.js"></script>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { 
+    background: #0a0a0f; 
+    color: #e0e0e0; 
+    font-family: 'Segoe UI', Tahoma, sans-serif; 
+    display: flex; 
+    height: 100vh; 
+    overflow: hidden;
+  }
+  #graph { flex: 1; }
+  #sidebar { 
+    width: 300px; 
+    background: linear-gradient(180deg, #12121a 0%, #0a0a0f 100%); 
+    border-left: 1px solid #1a1a2e; 
+    display: flex; 
+    flex-direction: column; 
+    overflow: hidden;
+  }
+  #search-wrap { padding: 16px; border-bottom: 1px solid #1a1a2e; }
+  #search { 
+    width: 100%; 
+    background: #0a0a0f; 
+    border: 1px solid #333; 
+    color: #e0e0e0; 
+    padding: 10px 14px; 
+    border-radius: 8px; 
+    font-size: 13px; 
+    outline: none;
+    transition: border-color 0.3s, box-shadow 0.3s;
+  }
+  #search:focus { 
+    border-color: #00ffff; 
+    box-shadow: 0 0 10px rgba(0,255,255,0.3);
+  }
+  #search-results { 
+    max-height: 150px; 
+    overflow-y: auto; 
+    padding: 6px 12px; 
+    border-bottom: 1px solid #1a1a2e; 
+    display: none; 
+  }
+  .search-item { 
+    padding: 6px 8px; 
+    cursor: pointer; 
+    border-radius: 4px; 
+    font-size: 12px; 
+    white-space: nowrap; 
+    overflow: hidden; 
+    text-overflow: ellipsis;
+    transition: background 0.2s;
+  }
+  .search-item:hover { background: #1a1a2e; }
+  #info-panel { 
+    padding: 16px; 
+    border-bottom: 1px solid #1a1a2e; 
+    min-height: 160px;
+    background: rgba(0,255,255,0.02);
+  }
+  #info-panel h3 { 
+    font-size: 11px; 
+    color: #00ffff; 
+    margin-bottom: 12px; 
+    text-transform: uppercase; 
+    letter-spacing: 0.1em;
+    text-shadow: 0 0 10px rgba(0,255,255,0.5);
+  }
+  #info-content { font-size: 13px; color: #ccc; line-height: 1.7; }
+  #info-content .field { margin-bottom: 6px; }
+  #info-content .field b { color: #fff; }
+  #info-content .empty { color: #444; font-style: italic; }
+  .neighbor-link { 
+    display: block; 
+    padding: 4px 8px; 
+    margin: 3px 0; 
+    border-radius: 4px; 
+    cursor: pointer; 
+    font-size: 12px; 
+    white-space: nowrap; 
+    overflow: hidden; 
+    text-overflow: ellipsis; 
+    border-left: 3px solid #333;
+    transition: background 0.2s, padding-left 0.2s;
+  }
+  .neighbor-link:hover { 
+    background: #1a1a2e; 
+    padding-left: 12px;
+  }
+  #neighbors-list { max-height: 180px; overflow-y: auto; margin-top: 8px; }
+  #legend-wrap { flex: 1; overflow-y: auto; padding: 16px; }
+  #legend-wrap h3 { 
+    font-size: 11px; 
+    color: #ff00ff; 
+    margin-bottom: 12px; 
+    text-transform: uppercase; 
+    letter-spacing: 0.1em;
+    text-shadow: 0 0 10px rgba(255,0,255,0.5);
+  }
+  .legend-item { 
+    display: flex; 
+    align-items: center; 
+    gap: 10px; 
+    padding: 6px 8px; 
+    cursor: pointer; 
+    border-radius: 6px; 
+    font-size: 12px;
+    transition: background 0.2s, padding-left 0.2s;
+  }
+  .legend-item:hover { background: #1a1a2e; padding-left: 12px; }
+  .legend-item.dimmed { opacity: 0.3; }
+  .legend-dot { 
+    width: 14px; 
+    height: 14px; 
+    border-radius: 50%; 
+    flex-shrink: 0;
+    box-shadow: 0 0 8px currentColor;
+  }
+  .legend-label { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .legend-count { color: #555; font-size: 11px; }
+  #stats { 
+    padding: 12px 16px; 
+    border-top: 1px solid #1a1a2e; 
+    font-size: 11px; 
+    color: #444;
+    background: #0a0a0f;
+  }
+  .glow-text { text-shadow: 0 0 10px currentColor; }
+</style>
+</head>
+<body>
+<div id="graph"></div>
+<div id="sidebar">
+  <div id="search-wrap">
+    <input id="search" type="text" placeholder="Buscar nós..." autocomplete="off">
+    <div id="search-results"></div>
+  </div>
+  <div id="info-panel">
+    <h3>Informações do Nó</h3>
+    <div id="info-content"><span class="empty">Clique em um nó para ver detalhes</span></div>
+  </div>
+  <div id="legend-wrap">
+    <h3>Comunidades</h3>
+    <div id="legend"></div>
+  </div>
+  <div id="stats">25 nós · 24 arestas · 4 comunidades</div>
+</div>
+<script>
+const RAW_NODES = [{"id": "graphify_run_py", "label": "graphify-run.py", "color": {"background": "#00ff88", "border": "#00ff88", "highlight": {"background": "#ffffff", "border": "#00ff88"}}, "size": 8.0, "font": {"size": 0, "color": "#ffffff"}, "title": "graphify-run.py", "community": 4, "community_name": "Tool Metadata", "source_file": "", "file_type": "code", "degree": 0}, {"id": "projeto_controle_de_acesso_com_esp32_rfid_rc222_bibliotecas_h", "label": "Bibliotecas.h", "color": {"background": "#ffdd00", "border": "#ffdd00", "highlight": {"background": "#ffffff", "border": "#ffdd00"}}, "size": 8.0, "font": {"size": 0, "color": "#ffffff"}, "title": "Bibliotecas.h", "community": 5, "community_name": "Bibliotecas Header", "source_file": "", "file_type": "code", "degree": 0}, {"id": "projeto_controle_de_acesso_com_esp32_rfid_rc222_gpios_h", "label": "GPIOs.h", "color": {"background": "#ff66cc", "border": "#ff66cc", "highlight": {"background": "#ffffff", "border": "#ff66cc"}}, "size": 8.0, "font": {"size": 0, "color": "#ffffff"}, "title": "GPIOs.h", "community": 6, "community_name": "GPIOs Header", "source_file": "", "file_type": "code", "degree": 0}, {"id": "projeto_controle_de_acesso_com_esp32_rfid_rc222_loginssenhas_h", "label": "LoginsSenhas.h", "color": {"background": "#ff4466", "border": "#ff4466", "highlight": {"background": "#ffffff", "border": "#ff4466"}}, "size": 8.0, "font": {"size": 0, "color": "#ffffff"}, "title": "LoginsSenhas.h", "community": 7, "community_name": "LoginsSenhas Header", "source_file": "", "file_type": "code", "degree": 0}, {"id": "esp32_microcontroller", "label": "ESP32 Microcontroller", "color": {"background": "#00ffff", "border": "#00ffff", "highlight": {"background": "#ffffff", "border": "#00ffff"}}, "size": 22.0, "font": {"size": 14, "color": "#00ffff"}, "title": "ESP32 Microcontroller", "community": 2, "community_name": "Hardware Peripherals", "source_file": "README.md", "file_type": "document", "degree": 6}, {"id": "rfid_rc522_reader", "label": "RFID RC522 Reader", "color": {"background": "#ff6600", "border": "#ff6600", "highlight": {"background": "#ffffff", "border": "#ff6600"}}, "size": 18.0, "font": {"size": 13, "color": "#ff6600"}, "title": "RFID RC522 Reader", "community": 1, "community_name": "RFID Card System", "source_file": "README.md", "file_type": "document", "degree": 4}, {"id": "relay_module", "label": "Relay Module", "color": {"background": "#00ff88", "border": "#00ff88", "highlight": {"background": "#ffffff", "border": "#00ff88"}}, "size": 14.0, "font": {"size": 12, "color": "#00ff88"}, "title": "Relay Module", "community": 2, "community_name": "Hardware Peripherals", "source_file": "README.md", "file_type": "document", "degree": 2}, {"id": "lcd_display", "label": "LCD Display", "color": {"background": "#00ccff", "border": "#00ccff", "highlight": {"background": "#ffffff", "border": "#00ccff"}}, "size": 16.0, "font": {"size": 12, "color": "#00ccff"}, "title": "LCD Display", "community": 2, "community_name": "Hardware Peripherals", "source_file": "README.md", "file_type": "document", "degree": 3}, {"id": "master_card", "label": "Master Card", "color": {"background": "#ffcc00", "border": "#ffcc00", "highlight": {"background": "#ffffff", "border": "#ffcc00"}}, "size": 14.0, "font": {"size": 12, "color": "#ffcc00"}, "title": "Master Card", "community": 1, "community_name": "RFID Card System", "source_file": "README.md", "file_type": "document", "degree": 2}, {"id": "rfid_tags", "label": "RFID Tags", "color": {"background": "#ff9933", "border": "#ff9933", "highlight": {"background": "#ffffff", "border": "#ff9933"}}, "size": 12.0, "font": {"size": 11, "color": "#ff9933"}, "title": "RFID Tags", "community": 1, "community_name": "RFID Card System", "source_file": "README.md", "file_type": "document", "degree": 2}, {"id": "access_control_system", "label": "Access Control System", "color": {"background": "#ff00ff", "border": "#ff00ff", "highlight": {"background": "#ffffff", "border": "#ff00ff"}}, "size": 28.0, "font": {"size": 16, "color": "#ff00ff"}, "title": "Access Control System", "community": 3, "community_name": "System Core", "source_file": "README.md", "file_type": "document", "degree": 8}, {"id": "mfrc522_library", "label": "MFRC522.h Library", "color": {"background": "#ff8800", "border": "#ff8800", "highlight": {"background": "#ffffff", "border": "#ff8800"}}, "size": 12.0, "font": {"size": 11, "color": "#ff8800"}, "title": "MFRC522.h Library", "community": 1, "community_name": "RFID Card System", "source_file": "README.md", "file_type": "document", "degree": 2}, {"id": "liquidcrystal_i2c_library", "label": "LiquidCrystal_I2C.h", "color": {"background": "#00aaff", "border": "#00aaff", "highlight": {"background": "#ffffff", "border": "#00aaff"}}, "size": 10.0, "font": {"size": 10, "color": "#00aaff"}, "title": "LiquidCrystal_I2C.h Library", "community": 2, "community_name": "Hardware Peripherals", "source_file": "README.md", "file_type": "document", "degree": 1}, {"id": "ota_firmware_update", "label": "OTA Firmware Update", "color": {"background": "#aa00ff", "border": "#aa00ff", "highlight": {"background": "#ffffff", "border": "#aa00ff"}}, "size": 18.0, "font": {"size": 13, "color": "#aa00ff"}, "title": "OTA Firmware Update", "community": 3, "community_name": "System Core", "source_file": "main.html", "file_type": "document", "degree": 4}, {"id": "spiffs_filesystem", "label": "SPIFFS Filesystem", "color": {"background": "#6600ff", "border": "#6600ff", "highlight": {"background": "#ffffff", "border": "#6600ff"}}, "size": 12.0, "font": {"size": 11, "color": "#6600ff"}, "title": "SPIFFS Filesystem", "community": 0, "community_name": "OTA Web Interface", "source_file": "access.html", "file_type": "document", "degree": 2}, {"id": "temperature_sensor", "label": "Temperature Sensor", "color": {"background": "#00ff99", "border": "#00ff99", "highlight": {"background": "#ffffff", "border": "#00ff99"}}, "size": 10.0, "font": {"size": 10, "color": "#00ff99"}, "title": "Temperature Sensor", "community": 0, "community_name": "OTA Web Interface", "source_file": "main.html", "file_type": "document", "degree": 1}, {"id": "upload_page", "label": "Upload Firmware Page", "color": {"background": "#ff3399", "border": "#ff3399", "highlight": {"background": "#ffffff", "border": "#ff3399"}}, "size": 14.0, "font": {"size": 12, "color": "#ff3399"}, "title": "Upload Firmware Page", "community": 0, "community_name": "OTA Web Interface", "source_file": "upload.html", "file_type": "document", "degree": 2}, {"id": "access_page", "label": "SPIFFS Update Page", "color": {"background": "#9933ff", "border": "#9933ff", "highlight": {"background": "#ffffff", "border": "#9933ff"}}, "size": 14.0, "font": {"size": 12, "color": "#9933ff"}, "title": "SPIFFS Update Page", "community": 0, "community_name": "OTA Web Interface", "source_file": "access.html", "file_type": "document", "degree": 2}, {"id": "main_page", "label": "Main OTA Page", "color": {"background": "#ff00cc", "border": "#ff00cc", "highlight": {"background": "#ffffff", "border": "#ff00cc"}}, "size": 16.0, "font": {"size": 12, "color": "#ff00cc"}, "title": "Main OTA Page", "community": 0, "community_name": "OTA Web Interface", "source_file": "main.html", "file_type": "document", "degree": 3}, {"id": "onecircuit_logo", "label": "OneCircuit Logo", "color": {"background": "#ffff00", "border": "#ffff00", "highlight": {"background": "#ffffff", "border": "#ffff00"}}, "size": 10.0, "font": {"size": 10, "color": "#ffff00"}, "title": "OneCircuit Logo", "community": 3, "community_name": "System Core", "source_file": "avatar.png", "file_type": "image", "degree": 2}, {"id": "graphify_tool", "label": "Graphify Tool", "color": {"background": "#88ff00", "border": "#88ff00", "highlight": {"background": "#ffffff", "border": "#88ff00"}}, "size": 10.0, "font": {"size": 10, "color": "#88ff00"}, "title": "Graphify Tool", "community": 3, "community_name": "System Core", "source_file": "AGENTS.md", "file_type": "document", "degree": 1}];
+
+const RAW_EDGES = [
+  {"from": "esp32_microcontroller", "to": "access_control_system", "label": "uses", "title": "uses [EXTRACTED]", "dashes": false, "width": 3, "color": "#00ffff", "confidence": "EXTRACTED"},
+  {"from": "esp32_microcontroller", "to": "rfid_rc522_reader", "label": "connects_to", "title": "connects_to [EXTRACTED]", "dashes": false, "width": 2, "color": "#00ffff", "confidence": "EXTRACTED"},
+  {"from": "esp32_microcontroller", "to": "lcd_display", "label": "connects_to", "title": "connects_to [EXTRACTED]", "dashes": false, "width": 2, "color": "#00ffff", "confidence": "EXTRACTED"},
+  {"from": "esp32_microcontroller", "to": "relay_module", "label": "connects_to", "title": "connects_to [EXTRACTED]", "dashes": false, "width": 2, "color": "#00ffff", "confidence": "EXTRACTED"},
+  {"from": "esp32_microcontroller", "to": "mfrc522_library", "label": "uses", "title": "uses [INFERRED]", "dashes": true, "width": 1, "color": "#00ffff", "confidence": "INFERRED"},
+  {"from": "esp32_microcontroller", "to": "liquidcrystal_i2c_library", "label": "uses", "title": "uses [INFERRED]", "dashes": true, "width": 1, "color": "#00ffff", "confidence": "INFERRED"},
+  {"from": "rfid_rc522_reader", "to": "access_control_system", "label": "uses", "title": "uses [EXTRACTED]", "dashes": false, "width": 3, "color": "#ff6600", "confidence": "EXTRACTED"},
+  {"from": "rfid_rc522_reader", "to": "rfid_tags", "label": "reads", "title": "reads [EXTRACTED]", "dashes": false, "width": 2, "color": "#ff6600", "confidence": "EXTRACTED"},
+  {"from": "rfid_rc522_reader", "to": "mfrc522_library", "label": "controls", "title": "controls [INFERRED]", "dashes": true, "width": 1, "color": "#ff6600", "confidence": "INFERRED"},
+  {"from": "relay_module", "to": "access_control_system", "label": "uses", "title": "uses [EXTRACTED]", "dashes": false, "width": 3, "color": "#00ff88", "confidence": "EXTRACTED"},
+  {"from": "lcd_display", "to": "access_control_system", "label": "uses", "title": "uses [EXTRACTED]", "dashes": false, "width": 3, "color": "#00ccff", "confidence": "EXTRACTED"},
+  {"from": "master_card", "to": "access_control_system", "label": "triggers_registration", "title": "triggers_registration_mode [EXTRACTED]", "dashes": false, "width": 2, "color": "#ffcc00", "confidence": "EXTRACTED"},
+  {"from": "master_card", "to": "rfid_tags", "label": "can_authorize", "title": "can_authorize [EXTRACTED]", "dashes": false, "width": 2, "color": "#ffcc00", "confidence": "EXTRACTED"},
+  {"from": "mfrc522_library", "to": "rfid_rc522_reader", "label": "controls", "title": "controls [INFERRED]", "dashes": true, "width": 1, "color": "#ff8800", "confidence": "INFERRED"},
+  {"from": "liquidcrystal_i2c_library", "to": "lcd_display", "label": "controls", "title": "controls [INFERRED]", "dashes": true, "width": 1, "color": "#00aaff", "confidence": "INFERRED"},
+  {"from": "access_control_system", "to": "ota_firmware_update", "label": "includes", "title": "includes [INFERRED]", "dashes": true, "width": 2, "color": "#ff00ff", "confidence": "INFERRED"},
+  {"from": "main_page", "to": "upload_page", "label": "references", "title": "references [EXTRACTED]", "dashes": false, "width": 2, "color": "#ff00cc", "confidence": "EXTRACTED"},
+  {"from": "main_page", "to": "access_page", "label": "references", "title": "references [EXTRACTED]", "dashes": false, "width": 2, "color": "#ff00cc", "confidence": "EXTRACTED"},
+  {"from": "ota_firmware_update", "to": "spiffs_filesystem", "label": "uses", "title": "uses [INFERRED]", "dashes": true, "width": 2, "color": "#aa00ff", "confidence": "INFERRED"},
+  {"from": "main_page", "to": "temperature_sensor", "label": "displays", "title": "displays [EXTRACTED]", "dashes": false, "width": 1, "color": "#ff00cc", "confidence": "EXTRACTED"},
+  {"from": "upload_page", "to": "ota_firmware_update", "label": "implements", "title": "implements [EXTRACTED]", "dashes": false, "width": 2, "color": "#ff3399", "confidence": "EXTRACTED"},
+  {"from": "access_page", "to": "spiffs_filesystem", "label": "updates", "title": "updates [EXTRACTED]", "dashes": false, "width": 2, "color": "#9933ff", "confidence": "EXTRACTED"},
+  {"from": "onecircuit_logo", "to": "access_control_system", "label": "brands", "title": "brands [INFERRED]", "dashes": true, "width": 1, "color": "#ffff00", "confidence": "INFERRED"},
+  {"from": "onecircuit_logo", "to": "ota_firmware_update", "label": "brands", "title": "brands [INFERRED]", "dashes": true, "width": 1, "color": "#ffff00", "confidence": "INFERRED"},
+  {"from": "graphify_tool", "to": "access_control_system", "label": "documents", "title": "documents [EXTRACTED]", "dashes": false, "width": 2, "color": "#88ff00", "confidence": "EXTRACTED"}
+];
+
+const LEGEND = [
+  {"cid": 0, "color": "#ff00cc", "label": "OTA Web Interface", "count": 5},
+  {"cid": 1, "color": "#ff6600", "label": "RFID Card System", "count": 4},
+  {"cid": 2, "color": "#00ffff", "label": "Hardware Peripherals", "count": 4},
+  {"cid": 3, "color": "#ff00ff", "label": "System Core", "count": 4},
+  {"cid": 4, "color": "#00ff88", "label": "Tool Metadata", "count": 1},
+  {"cid": 5, "color": "#ffdd00", "label": "Bibliotecas Header", "count": 1},
+  {"cid": 6, "color": "#ff66cc", "label": "GPIOs Header", "count": 1},
+  {"cid": 7, "color": "#ff4466", "label": "LoginsSenhas Header", "count": 1}
+];
+
+function esc(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+
+const nodesDS = new vis.DataSet(RAW_NODES.map(n => ({
+  id: n.id, label: n.label, color: n.color, size: n.size,
+  font: n.font, title: n.title,
+  _community: n.community, _community_name: n.community_name,
+  _source_file: n.source_file, _file_type: n.file_type, _degree: n.degree,
+  borderWidth: 2,
+  shadow: { enabled: true, size: 12, x: 0, y: 0, color: n.color.background }
+})));
+
+const edgesDS = new vis.DataSet(RAW_EDGES.map((e, i) => ({
+  id: i, from: e.from, to: e.to,
+  label: '',
+  title: e.title,
+  dashes: e.dashes,
+  width: e.width,
+  color: { color: e.color, highlight: e.color, hover: e.color, opacity: 0.9 },
+  arrows: { to: { enabled: true, scaleFactor: 0.6, color: e.color } },
+  shadow: { enabled: true, size: 6, x: 0, y: 0, color: e.color }
+})));
+
+const container = document.getElementById('graph');
+const network = new vis.Network(container, { nodes: nodesDS, edges: edgesDS }, {
+  physics: {
+    enabled: true,
+    solver: 'forceAtlas2Based',
+    forceAtlas2Based: {
+      gravitationalConstant: -80,
+      centralGravity: 0.01,
+      springLength: 150,
+      springConstant: 0.08,
+      damping: 0.4,
+      avoidOverlap: 0.8,
+    },
+    stabilization: { iterations: 300, fit: true },
+  },
+  interaction: {
+    hover: true,
+    tooltipDelay: 100,
+    hideEdgesOnDrag: false,
+    navigationButtons: true,
+    keyboard: true,
+  },
+  nodes: { 
+    shape: 'dot', 
+    borderWidth: 2,
+    scaling: { min: 8, max: 30 }
+  },
+  edges: { 
+    smooth: { type: 'continuous', roundness: 0.3 }, 
+    selectionWidth: 4 
+  },
+});
+
+network.once('stabilizationIterationsDone', () => {
+  network.setOptions({ physics: { enabled: false } });
+});
+
+function showInfo(nodeId) {
+  const n = nodesDS.get(nodeId);
+  if (!n) return;
+  const neighborIds = network.getConnectedNodes(nodeId);
+  const neighborItems = neighborIds.map(nid => {
+    const nb = nodesDS.get(nid);
+    const color = nb ? nb.color.background : '#555';
+    return `<span class="neighbor-link" style="border-left-color:${esc(color)}" onclick="focusNode(${JSON.stringify(nid)})">${esc(nb ? nb.label : nid)}</span>`;
+  }).join('');
+  document.getElementById('info-content').innerHTML = `
+    <div class="field" style="margin-bottom:10px"><b style="font-size:15px;text-shadow:0 0 10px ${esc(n.color.background)}">${esc(n.label)}</b></div>
+    <div class="field">Tipo: <b>${esc(n._file_type || 'desconhecido')}</b></div>
+    <div class="field">Comunidade: <b>${esc(n._community_name)}</b></div>
+    <div class="field">Conexões: <b>${n._degree}</b></div>
+    ${neighborIds.length ? `<div style="margin-top:10px;color:#666;font-size:11px;text-transform:uppercase;letter-spacing:0.05em">Vizinhos (${neighborIds.length})</div><div id="neighbors-list">${neighborItems}</div>` : ''}
+  `;
+}
+
+function focusNode(nodeId) {
+  network.focus(nodeId, { scale: 1.4, animation: true });
+  network.selectNodes([nodeId]);
+  showInfo(nodeId);
+}
+
+let hoveredNodeId = null;
+network.on('hoverNode', params => {
+  hoveredNodeId = params.node;
+  container.style.cursor = 'pointer';
+});
+network.on('blurNode', () => {
+  hoveredNodeId = null;
+  container.style.cursor = 'default';
+});
+container.addEventListener('click', () => {
+  if (hoveredNodeId !== null) {
+    showInfo(hoveredNodeId);
+    network.selectNodes([hoveredNodeId]);
+  }
+});
+network.on('click', params => {
+  if (params.nodes.length > 0) {
+    showInfo(params.nodes[0]);
+  } else if (hoveredNodeId === null) {
+    document.getElementById('info-content').innerHTML = '<span class="empty">Clique em um nó para ver detalhes</span>';
+  }
+});
+
+const searchInput = document.getElementById('search');
+const searchResults = document.getElementById('search-results');
+searchInput.addEventListener('input', () => {
+  const q = searchInput.value.toLowerCase().trim();
+  searchResults.innerHTML = '';
+  if (!q) { searchResults.style.display = 'none'; return; }
+  const matches = RAW_NODES.filter(n => n.label.toLowerCase().includes(q)).slice(0, 20);
+  if (!matches.length) { searchResults.style.display = 'none'; return; }
+  searchResults.style.display = 'block';
+  matches.forEach(n => {
+    const el = document.createElement('div');
+    el.className = 'search-item';
+    el.textContent = n.label;
+    el.style.borderLeft = `3px solid ${n.color.background}`;
+    el.style.boxShadow = `0 0 5px ${n.color.background}40`;
+    el.style.paddingLeft = '8px';
+    el.onclick = () => {
+      network.focus(n.id, { scale: 1.5, animation: true });
+      network.selectNodes([n.id]);
+      showInfo(n.id);
+      searchResults.style.display = 'none';
+      searchInput.value = '';
+    };
+    searchResults.appendChild(el);
+  });
+});
+document.addEventListener('click', e => {
+  if (!searchResults.contains(e.target) && e.target !== searchInput)
+    searchResults.style.display = 'none';
+});
+
+const hiddenCommunities = new Set();
+const legendEl = document.getElementById('legend');
+LEGEND.forEach(c => {
+  const item = document.createElement('div');
+  item.className = 'legend-item';
+  item.innerHTML = `<div class="legend-dot" style="background:${c.color};box-shadow:0 0 8px ${c.color}"></div>
+    <span class="legend-label">${c.label}</span>
+    <span class="legend-count">${c.count}</span>`;
+  item.onclick = () => {
+    if (hiddenCommunities.has(c.cid)) {
+      hiddenCommunities.delete(c.cid);
+      item.classList.remove('dimmed');
+    } else {
+      hiddenCommunities.add(c.cid);
+      item.classList.add('dimmed');
+    }
+    const updates = RAW_NODES
+      .filter(n => n.community === c.cid)
+      .map(n => ({ id: n.id, hidden: hiddenCommunities.has(c.cid) }));
+    nodesDS.update(updates);
+  };
+  legendEl.appendChild(item);
+});
+</script>
+<script>
+const hyperedges = [
+  {"id": "access_control_hardware", "label": "Hardware Stack", "nodes": ["esp32_microcontroller", "rfid_rc522_reader", "relay_module", "lcd_display"], "color": "#00ffff"},
+  {"id": "ota_web_interface", "label": "OTA Web Interface", "nodes": ["main_page", "upload_page", "access_page"], "color": "#ff00cc"},
+  {"id": "software_libraries", "label": "Libraries", "nodes": ["mfrc522_library", "liquidcrystal_i2c_library"], "color": "#aa00ff"}
+];
+
+network.on('afterDrawing', function(ctx) {
+    hyperedges.forEach(h => {
+        const positions = h.nodes
+            .map(nid => network.getPositions([nid])[nid])
+            .filter(p => p !== undefined);
+        if (positions.length < 2) return;
+        ctx.save();
+        ctx.globalAlpha = 0.08;
+        ctx.fillStyle = h.color;
+        ctx.strokeStyle = h.color;
+        ctx.lineWidth = 2;
+        ctx.setLineDash([5, 5]);
+        ctx.beginPath();
+        const cx = positions.reduce((s, p) => s + p.x, 0) / positions.length;
+        const cy = positions.reduce((s, p) => s + p.y, 0) / positions.length;
+        const expanded = positions.map(p => ({
+            x: cx + (p.x - cx) * 1.2,
+            y: cy + (p.y - cy) * 1.2
+        }));
+        ctx.moveTo(expanded[0].x, expanded[0].y);
+        expanded.slice(1).forEach(p => ctx.lineTo(p.x, p.y));
+        ctx.closePath();
+        ctx.fill();
+        ctx.globalAlpha = 0.3;
+        ctx.stroke();
+        ctx.globalAlpha = 0.9;
+        ctx.fillStyle = h.color;
+        ctx.font = 'bold 10px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.shadowColor = h.color;
+        ctx.shadowBlur = 10;
+        ctx.fillText(h.label, cx, cy - 5);
+        ctx.restore();
+    });
+});
+
+network.on('zoom', function() {
+    network.redraw();
+});
+</script>
+</body>
+</html>

@@ -14,4 +14,4 @@ constexpr uint8_t Buzzer = 17;           // GPIO do Buzzer
 
 //LCD 20X04 I2C
 //SDA GPIO 21
-//SLC GPIO 22
+//SCL GPIO 22
