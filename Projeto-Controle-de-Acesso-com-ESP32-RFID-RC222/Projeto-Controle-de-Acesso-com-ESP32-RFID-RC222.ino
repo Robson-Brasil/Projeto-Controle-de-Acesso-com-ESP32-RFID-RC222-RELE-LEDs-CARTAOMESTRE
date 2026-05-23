@@ -189,7 +189,7 @@ void initOTA() {
   ArduinoOTA.setHostname("ESP32-RFID");  // Escolhe um note para o teu dispositivo
 
   // No authentication by default
-  ArduinoOTA.setPassword("Escolhe uma senha e coloca aqui");  // Coloca uma senha para deixar o OTA seguro
+  ArduinoOTA.setPassword("S3nh@S3gur@");  // Coloca uma senha para deixar o OTA seguro
 
   // Password can be set with it's md5 value as well
   // MD5(admin) = 21232f297a57a5a743894a0e4a801fc3
@@ -504,20 +504,41 @@ void granted(uint16_t setDelay) {
 ///////////////////////////////////////////////// Accesso Negado ///////////////////////////////////////////////////
 
 void denied() {
-  digitalWrite(LedVerde, LED_OFF);    // Certifique-se de que o LED verde está desligado
-  digitalWrite(LedAzul, LED_OFF);     // Certifique-se de que o LED azul está desligado
-  digitalWrite(LedVermelho, LED_ON);  // Certifique-se de que o LED vermelho está ligado
-  digitalWrite(Rele, HIGH);           // Tranca a porta novamente
+ // Certifique-se de que os outros LEDs estão desligados
+ digitalWrite(LedVerde, LED_OFF); 
+ digitalWrite(LedAzul, LED_OFF); 
 
-  // Padrão de 6 bips do buzzer para acesso negado
-  for (int i = 0; i < 6; i++) {
-    digitalWrite(Buzzer, HIGH);
-    delay(250);
-    digitalWrite(Buzzer, LOW);
+ // Padrão de 6 bips curtos para acesso negado
+ for (int i = 0; i < 6; i++) {
+ digitalWrite(Buzzer, HIGH);
+ delay(250);
+ digitalWrite(Buzzer, LOW);
+ }
+
+ // Padrão de 3 bips longos para acesso negado
+ for (int i = 0; i < 3; i++) {
+ digitalWrite(Buzzer, HIGH);
+ delay(1000);
+ digitalWrite(Buzzer, LOW);
     delay(250);
   }
 
   lcdNeedsUpdate = true;  // Forçar atualização do LCD
+=======
+  // Repete o padrão 8 vezes (LED vermelho e buzzer piscando juntos)
+  for (int i = 0; i < 8; i++) {
+    digitalWrite(LedVermelho, LED_ON);  // Liga o LED vermelho
+    digitalWrite(Buzzer, HIGH);         // Liga o buzzer
+    delay(250);                         // Aguarda 250ms
+
+    digitalWrite(LedVermelho, LED_OFF); // Desliga o LED vermelho
+    digitalWrite(Buzzer, LOW);          // Desliga o buzzer
+    delay(250);                         // Aguarda mais 250ms
+  }
+
+  // Tranca a porta novamente
+  digitalWrite(Rele, HIGH);  
+>>>>>>> 327d4d9 (Atualização automática: 2026-05-23 03:47)
 }
 
 ////////////////////////////// Obter UID do PICC (Proximity Integrated Circuit Card) ////////////////////////////////
